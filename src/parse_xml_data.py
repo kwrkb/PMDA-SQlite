@@ -1,0 +1,187 @@
+import xml.etree.ElementTree as ET
+import os
+import re
+
+def extract_text_from_element(element, ns):
+    """
+    XML要素からテキストを再帰的に抽出します。
+    """
+    if element is None:
+        return None
+
+    texts = []
+
+    # 直接のテキスト
+    if element.text:
+        texts.append(element.text.strip())
+
+    # 子要素を再帰的に処理
+    for child in element:
+        child_text = extract_text_from_element(child, ns)
+        if child_text:
+            texts.append(child_text)
+
+        # 要素の後のテール部分も含める
+        if child.tail:
+            texts.append(child.tail.strip())
+
+    result = ' '.join([t for t in texts if t])
+    return result if result else None
+
+def parse_xml_file(xml_path):
+    """
+    PMDA XMLファイルを解析して医薬品情報を抽出します。
+    """
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+
+        # 名前空間
+        ns = {'p': 'http://info.pmda.go.jp/namespace/prescription_drugs/package_insert/1.0'}
+
+        medicine_data = {
+            "product_name": None,
+            "generic_name": None,
+            "manufacturer": None,
+            "revision_date": None,
+            "jsc_code": None,
+            "indications": None,
+            "dosage": None,
+            "contraindications": None,
+            "side_effects": None,
+            "source_file": os.path.basename(xml_path),
+        }
+
+        interactions_data = []
+
+        # 製品名（最初のもの）
+        brand_name = root.find('.//p:ApprovalBrandName/p:Lang', ns)
+        if brand_name is not None:
+            medicine_data["product_name"] = brand_name.text
+
+        # 一般名
+        generic_name_elem = root.find('.//p:GenericName/p:GenericNameHeader/p:Lang', ns)
+        if generic_name_elem is not None:
+            medicine_data["generic_name"] = generic_name_elem.text
+        else:
+            # 薬効分類名を代替として使用
+            therapeutic = root.find('.//p:TherapeuticClassification/p:Detail/p:Lang', ns)
+            if therapeutic is not None:
+                medicine_data["generic_name"] = therapeutic.text
+
+        # 日本標準商品分類番号
+        sccj = root.find('.//p:SccjNo', ns)
+        if sccj is not None:
+            medicine_data["jsc_code"] = sccj.text
+
+        # 改訂年月（最新のもの）
+        revisions = root.findall('.//p:PreparationOrRevision[@id="今回"]', ns)
+        if revisions:
+            ym = revisions[0].find('.//p:YearMonth', ns)
+            if ym is not None:
+                # "2024-10" -> "2024年10月"
+                date_str = ym.text
+                if date_str and '-' in date_str:
+                    year, month = date_str.split('-')
+                    medicine_data["revision_date"] = f"{year}年{month.lstrip('0')}月"
+
+        # 製造販売業者
+        manufacturer_elem = root.find('.//p:NameAddressManufact/p:NameAddressTradingCompany', ns)
+        if manufacturer_elem is not None:
+            company_name = manufacturer_elem.find('.//p:Name/p:Lang', ns)
+            if company_name is not None:
+                medicine_data["manufacturer"] = company_name.text
+
+        # 効能又は効果
+        indications_elem = root.find('.//p:IndicationsOrEfficacy', ns)
+        if indications_elem is not None:
+            medicine_data["indications"] = extract_text_from_element(indications_elem, ns)
+
+        # 用法及び用量
+        dosage_elem = root.find('.//p:InfoDoseAdmin', ns)
+        if dosage_elem is not None:
+            medicine_data["dosage"] = extract_text_from_element(dosage_elem, ns)
+
+        # 禁忌
+        contraindications_elem = root.find('.//p:ContraIndications', ns)
+        if contraindications_elem is not None:
+            medicine_data["contraindications"] = extract_text_from_element(contraindications_elem, ns)
+
+        # 副作用
+        adverse_elem = root.find('.//p:AdverseEvents', ns)
+        if adverse_elem is not None:
+            medicine_data["side_effects"] = extract_text_from_element(adverse_elem, ns)
+
+        # 相互作用
+        interactions_elem = root.find('.//p:Interactions', ns)
+        if interactions_elem is not None:
+            # 併用禁忌
+            contraindicated = interactions_elem.findall('.//p:ContraIndicatedCombination', ns)
+            for combo in contraindicated:
+                # Drug/DrugName内のすべてのLang要素を取得
+                drug_names = combo.findall('.//p:DrugName//p:Lang', ns)
+                if drug_names:
+                    # 最初の薬剤名を使用
+                    drug_name = drug_names[0].text if drug_names[0].text else ''
+
+                    # 相互作用の詳細（臨床症状、機序、処置方法など）
+                    details = []
+                    for detail_type in ['p:ClinicalSymptom', 'p:Mechanism', 'p:TreatmentMethod']:
+                        detail_elems = combo.findall(f'.//{detail_type}//p:Lang', ns)
+                        for detail in detail_elems:
+                            if detail.text:
+                                details.append(detail.text)
+
+                    description = ' '.join(details) if details else '併用禁忌'
+                    interactions_data.append({
+                        'target_name': drug_name.strip(),
+                        'description': description
+                    })
+
+            # 併用注意
+            precautions = interactions_elem.findall('.//p:PrecautionsForCombination', ns)
+            for combo in precautions:
+                # Drug/DrugName内のすべてのLang要素を取得
+                drug_names = combo.findall('.//p:DrugName//p:Lang', ns)
+                if drug_names:
+                    # 最初の薬剤名を使用
+                    drug_name = drug_names[0].text if drug_names[0].text else ''
+
+                    # 相互作用の詳細
+                    details = []
+                    for detail_type in ['p:ClinicalSymptom', 'p:Mechanism', 'p:TreatmentMethod']:
+                        detail_elems = combo.findall(f'.//{detail_type}//p:Lang', ns)
+                        for detail in detail_elems:
+                            if detail.text:
+                                details.append(detail.text)
+
+                    description = ' '.join(details) if details else '併用注意'
+                    interactions_data.append({
+                        'target_name': drug_name.strip(),
+                        'description': description
+                    })
+
+        return medicine_data, interactions_data
+
+    except Exception as e:
+        print(f"XMLパース中にエラー: {xml_path} - {e}")
+        return None, None
+
+if __name__ == '__main__':
+    # テスト
+    xml_file = 'data/PMDAraw/pmda_all_20251122/SGML_XML/クエチアピン錠２００ｍｇ「ＦＦＰ」/300166_1179042F1062_2_05.xml'
+
+    medicine_info, interaction_info = parse_xml_file(xml_file)
+
+    if medicine_info:
+        print("=== 抽出された医薬品情報 ===")
+        for key, value in medicine_info.items():
+            if value:
+                display_value = value[:100] + "..." if len(str(value)) > 100 else value
+                print(f"{key}: {display_value}")
+
+        print(f"\n=== 抽出された相互作用情報 ===")
+        print(f"相互作用件数: {len(interaction_info)}")
+        for i, interaction in enumerate(interaction_info[:3]):
+            print(f"\n{i+1}. {interaction['target_name']}")
+            print(f"   {interaction['description'][:100]}...")

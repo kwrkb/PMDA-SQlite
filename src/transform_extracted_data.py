@@ -2,6 +2,52 @@ import json
 import os
 import re
 
+def extract_section_content(json_data, section_keywords, end_keywords=None):
+    """
+    特定のセクションキーワードに一致するパラグラフから、次のセクションまでの内容を抽出します。
+    ページごとに処理してorder番号の重複を避けます。
+    """
+    content_parts = []
+    in_section = False
+
+    for page_idx, page_data in enumerate(json_data):
+        paragraphs = page_data.get('paragraphs', [])
+        # ページ内でorderでソート
+        paragraphs.sort(key=lambda x: x.get('order', 99999))
+
+        for para in paragraphs:
+            content = para.get('contents', '')
+            role = para.get('role')
+
+            # セクション開始を検出
+            if not in_section and any(kw in content for kw in section_keywords):
+                if role == 'section_headings':
+                    in_section = True
+                    continue
+
+            # セクション終了を検出
+            if in_section:
+                # 新しいセクションヘッダーが見つかったら終了
+                if role == 'section_headings':
+                    # セクション番号パターン（数字. または **数字.）をチェック
+                    if re.match(r'^\*?\*?\s*\d+\.', content.strip()):
+                        # 次のセクションに移行
+                        break
+                    # 終了キーワードをチェック
+                    if end_keywords and any(kw in content for kw in end_keywords):
+                        break
+
+                # コンテンツを収集（ページヘッダー・セクションヘッダー以外）
+                if role not in ['page_header', 'section_headings'] and content.strip():
+                    content_parts.append(content)
+
+        # セクションが見つかった後、次のページで終了条件が見つかったら終了
+        if in_section and len(content_parts) > 0:
+            # 次のページの最初のセクションヘッダーで終了する可能性を考慮
+            pass
+
+    return '\n'.join(content_parts).strip() if content_parts else None
+
 def transform_data(json_data, source_file_name):
     """
     yomitokuから抽出されたJSONデータを整形し、データベース挿入用の辞書形式に変換します。
@@ -18,7 +64,7 @@ def transform_data(json_data, source_file_name):
         "side_effects": None,
         "source_file": source_file_name,
     }
-    
+
     # 相互作用データも初期化
     interactions_data = []
 
@@ -26,86 +72,153 @@ def transform_data(json_data, source_file_name):
     for page_data in json_data:
         all_paragraphs.extend(page_data.get('paragraphs', []))
     
-    product_name_candidates = []
-    
     all_paragraphs.sort(key=lambda x: x.get('order', 99999))
 
-    product_name_order = -1 # product_name が見つかったパラグラフの order
+    # product_name はファイル名から取得（最も確実）
+    medicine_data["product_name"] = os.path.splitext(source_file_name)[0]
 
+    # revision_date の抽出
     for paragraph in all_paragraphs:
         content = paragraph.get('contents', '')
-        role = paragraph.get('role', None)
 
-        # revision_date の抽出
         if medicine_data["revision_date"] is None:
             match_revision = re.search(r'(\d{4}年\d{1,2}月)改訂', content)
             if match_revision:
                 medicine_data["revision_date"] = match_revision.group(1)
-
-        # product_name の候補収集
-        if len(content) < 100 and \
-           re.search(r'(OD錠|錠|カプセル|注|散|顆粒|テープ|ローション|液)', content) and \
-           not re.search(r'\d{4}年\d{1,2}月改訂', content) and \
-           "製造販売" not in content and "貯法" not in content and \
-           "有効期間" not in content and "組成" not in content and \
-           "性状" not in content and \
-           role != "page_header" and \
-           not content.startswith("**"): # ** から始まる行は除外
-            cleaned_content = re.sub(r'[*\<>()「」\s]', '', content).strip() # 不要な記号とスペースを除去
-            if cleaned_content and len(cleaned_content) > 5: # 空文字列や短すぎるものは追加しない
-                product_name_candidates.append((cleaned_content, paragraph.get('order')))
-                
-    # 最終的な product_name の決定 (候補から最も適切なものを選ぶ)
-    if product_name_candidates:
-        # 複数の候補がある場合、より具体的なもの（例: メーカー名を含む）や、より上部にあるものを優先
-        medicine_data["product_name"] = product_name_candidates[0][0]
-        product_name_order = product_name_candidates[0][1]
-
-    # product_name が見つからなかった場合、元のファイル名から取得
-    if medicine_data["product_name"] is None:
-        medicine_data["product_name"] = os.path.splitext(source_file_name)[0]
-    
-    # 最終的な generic_name の決定 (product_name よりも上にある候補から選ぶ)
-    if product_name_order != -1:
-        generic_name_final_candidates = []
-        for paragraph in all_paragraphs:
-            content = paragraph.get('contents', '')
-            order = paragraph.get('order', 99999)
-
-            if order < product_name_order: # product_name よりも上のパラグラフ
-                for line in content.split('\n'):
-                    line = line.strip()
-                    # 製品名に似た文字列、意味をなさない短い文字列、セクション番号、薬効分類、ヘッダー等のノイズを除外
-                    if line and len(line) > 5 and len(line) < 50 and \
-                       not re.match(r'^\d+(\.\d+)*\s', line) and \
-                       not re.search(r'(規制区分|製造販売|貯法|有効期間|組成|性状|作用機序)', line) and \
-                       not re.search(r'(阻害剤|治療剤|高尿酸血症|処方箋医薬品)', line) and \
-                       not line.endswith("剤") and \
-                       not line.startswith("3A05FP") and \
-                       not line.startswith("**") and \
-                       (medicine_data["product_name"] is None or medicine_data["product_name"] not in line) : # 製品名そのものも除外
-                            generic_name_final_candidates.append((line, order))
-        
-        # 候補を order の降順にソートして、直近の候補から検討
-        generic_name_final_candidates.sort(key=lambda x: x[1], reverse=True)
-
-        best_generic_name = None
-        for gnc_content, _ in generic_name_final_candidates:
-            # 剤形を含むものを優先的に一般名とする
-            if re.search(r'(OD錠|錠|カプセル|顆粒|散|注|テープ|液)', gnc_content):
-                best_generic_name = gnc_content
                 break
-        
-        if best_generic_name is None and generic_name_final_candidates:
-            # 剤形を含むものが見つからなければ、最も簡潔な候補を試す
-            shortest_candidate = None
-            for gnc_content, _ in generic_name_final_candidates:
-                if shortest_candidate is None or len(gnc_content) < len(shortest_candidate):
-                    shortest_candidate = gnc_content
-            best_generic_name = shortest_candidate
 
-        medicine_data["generic_name"] = best_generic_name
-            
+    # generic_name の抽出（薬効分類や一般名に関する情報）
+    # 最初のページから薬効分類や一般名らしい情報を探す
+    generic_name_candidates = []
+    for paragraph in all_paragraphs[:50]:  # 最初の50パラグラフから探す
+        content = paragraph.get('contents', '')
+        role = paragraph.get('role')
+
+        # 薬効分類や一般名の特徴：
+        # - 比較的短い（100文字以下）
+        # - 薬効に関するキーワードを含む、または剤形を含む
+        # - セクションヘッダーではない
+        if (role not in ['page_header', 'section_headings'] and
+            len(content) < 100 and
+            content.strip() and
+            (re.search(r'(阻害剤|治療剤|抑制剤|拮抗剤|製剤|配合剤)', content) or
+             re.search(r'(錠|カプセル|注|散|顆粒|シロップ|液|テープ|軟膏|クリーム|ローション)', content))):
+            # ノイズを除外
+            if not re.search(r'(製造販売|貯法|有効期間|改訂|規制区分|処方箋医薬品)', content):
+                generic_name_candidates.append(content.strip())
+
+    # 候補がある場合、最初のものを使用
+    if generic_name_candidates:
+        medicine_data["generic_name"] = generic_name_candidates[0]
+
+    # manufacturer（製造販売会社）の抽出
+    for paragraph in all_paragraphs:
+        content = paragraph.get('contents', '')
+        if '製造販売' in content:
+            # "製造販売元" や "製造販売業者" の後に続く会社名を抽出
+            match = re.search(r'製造販売[元業者]*[:\s　]*(.+)', content)
+            if match:
+                manufacturer_candidate = match.group(1).strip()
+                # 改行や余分な情報を除去
+                manufacturer_candidate = manufacturer_candidate.split('\n')[0]
+                # 括弧内の情報も除去（住所などが含まれる場合）
+                manufacturer_candidate = re.sub(r'[（(].*?[)）]', '', manufacturer_candidate).strip()
+                if manufacturer_candidate and len(manufacturer_candidate) < 100:
+                    medicine_data["manufacturer"] = manufacturer_candidate
+                    break
+
+    # jsc_code（日本標準商品分類コード）の抽出
+    for paragraph in all_paragraphs:
+        content = paragraph.get('contents', '')
+        role = paragraph.get('role')
+        # ページヘッダーに含まれることが多い（例: "3A05FP"）
+        if role == 'page_header' and len(content) < 20:
+            # 英数字のみで構成される短いコードを検出
+            if re.match(r'^[A-Z0-9]{4,10}$', content.strip()):
+                medicine_data["jsc_code"] = content.strip()
+                break
+
+    # indications（効能・効果）の抽出
+    indications_content = extract_section_content(
+        json_data,
+        section_keywords=['効能又は効果', '効能・効果'],
+        end_keywords=['効能又は効果に関連する注意', '用法及び用量', '用法・用量']
+    )
+    if indications_content:
+        medicine_data["indications"] = indications_content
+
+    # dosage（用法・用量）の抽出
+    dosage_content = extract_section_content(
+        json_data,
+        section_keywords=['用法及び用量', '用法・用量'],
+        end_keywords=['用法及び用量に関連する注意', '使用上の注意', '重要な基本的注意']
+    )
+    if dosage_content:
+        medicine_data["dosage"] = dosage_content
+
+    # contraindications（禁忌）の抽出
+    contraindications_content = extract_section_content(
+        json_data,
+        section_keywords=['禁忌', '次の患者には投与しないこと'],
+        end_keywords=['重要な基本的注意', '特定の背景を有する患者', '相互作用']
+    )
+    if contraindications_content:
+        medicine_data["contraindications"] = contraindications_content
+
+    # side_effects（副作用）の抽出
+    side_effects_content = extract_section_content(
+        json_data,
+        section_keywords=['副作用'],
+        end_keywords=['臨床検査結果に及ぼす影響', '過量投与', '適用上の注意']
+    )
+    if side_effects_content:
+        medicine_data["side_effects"] = side_effects_content
+
+    # interactions（相互作用）の抽出
+    interaction_content = extract_section_content(
+        json_data,
+        section_keywords=['相互作用'],
+        end_keywords=['副作用']
+    )
+
+    # 相互作用データをパースしてinteractions_dataに追加
+    if interaction_content:
+        # テーブル形式のデータをパースする簡単なロジック
+        lines = interaction_content.split('\n')
+        current_interaction = None
+        current_description = []
+
+        for line in lines:
+            line = line.strip()
+            if not line or '併用' in line or '薬剤名' in line:
+                continue
+
+            # 薬剤名のパターン（比較的短い行で、漢字・カタカナを含む、または英単語）
+            # 「作用」「影響」などの一般的なワードを除外
+            if (len(line) < 60 and
+                not re.search(r'(作用|影響|機序|臨床症状|措置方法|注意)', line) and
+                (re.search(r'[ァ-ヶ一-龥]', line) or re.match(r'^[A-Za-z\s\-/]+$', line))):
+                # 前の相互作用を保存
+                if current_interaction and current_description:
+                    interactions_data.append({
+                        'target_name': current_interaction,
+                        'description': ' '.join(current_description).strip()
+                    })
+                # 新しい相互作用を開始
+                current_interaction = line
+                current_description = []
+            else:
+                # 説明文を蓄積
+                if current_interaction:
+                    current_description.append(line)
+
+        # 最後の相互作用を追加
+        if current_interaction and current_description:
+            interactions_data.append({
+                'target_name': current_interaction,
+                'description': ' '.join(current_description).strip()
+            })
+
     return medicine_data, interactions_data
 
 if __name__ == '__main__':
