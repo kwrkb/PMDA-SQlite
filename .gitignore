@@ -11,6 +11,11 @@ __pycache__/
 # SQLite database file
 *.sqlite
 
+# Log files
+*_log.txt
+full_load_log.txt
+load_log.txt
+
 # IDE/Editor specific
 .idea/
 .vscode/
