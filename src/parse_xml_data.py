@@ -2,31 +2,139 @@ import xml.etree.ElementTree as ET
 import os
 import re
 
-def extract_text_from_element(element, ns):
+def process_table(element, ns):
+    """
+    XMLのTable要素をMarkdownの表形式に変換します。
+    """
+    try:
+        rows_data = []
+        # TableDetail > TableRow
+        # 複数のTableDetailがある可能性や、直接TableRowがある可能性を考慮
+        rows = element.findall('.//p:TableRow', ns)
+
+        if not rows:
+            return ""
+
+        for row in rows:
+            cells = row.findall('.//p:TableCell', ns)
+            row_text = []
+            for cell in cells:
+                # セル内のテキストを抽出（再帰的に、ただしセルの深さはリセットしても良いが、
+                # セル内にリストがある場合も考慮して深さ0で呼ぶ）
+                cell_text = extract_text_from_element(cell, ns, depth=0)
+                # Markdownの表内で改行は使えないため、<br>に変換するか、スペースにする
+                if cell_text:
+                    cell_text = cell_text.replace('\n', '<br>')
+                row_text.append(cell_text if cell_text else "")
+            rows_data.append(row_text)
+
+        if not rows_data:
+            return ""
+
+        # Markdownへの変換
+        # 最大列数を取得
+        max_cols = max(len(r) for r in rows_data)
+        if max_cols == 0:
+            return ""
+
+        markdown = []
+
+        # キャプション（表のタイトル）
+        caption = element.find('.//p:Caption/p:Lang', ns)
+        if caption is not None and caption.text:
+            markdown.append(f"\n**{caption.text.strip()}**\n")
+
+        # ヘッダー行の処理
+        # 最初の行をヘッダーとみなす
+        header = rows_data[0]
+        # 列数が足りない場合は埋める
+        header += [""] * (max_cols - len(header))
+
+        markdown.append("| " + " | ".join(header) + " |")
+        markdown.append("| " + " | ".join(["---"] * max_cols) + " |")
+
+        # データ行
+        for row in rows_data[1:]:
+            row += [""] * (max_cols - len(row))
+            markdown.append("| " + " | ".join(row) + " |")
+
+        return "\n".join(markdown) + "\n"
+
+    except Exception as e:
+        # テーブル処理でエラーが起きても全体のパースを止めない
+        print(f"Table processing error: {e}")
+        return ""
+
+def extract_text_from_element(element, ns, depth=0):
     """
     XML要素からテキストを再帰的に抽出します。
+    タグ構造に応じてMarkdown形式の整形を行います。
     """
     if element is None:
         return None
 
+    # 名前空間を除いたタグ名を取得
+    tag = element.tag.split('}')[-1] if '}' in element.tag else element.tag
+
+    # Tableタグの特別処理
+    if tag == 'Table':
+        return process_table(element, ns)
+
     texts = []
 
     # 直接のテキスト
-    if element.text:
+    if element.text and element.text.strip():
         texts.append(element.text.strip())
 
     # 子要素を再帰的に処理
     for child in element:
-        child_text = extract_text_from_element(child, ns)
+        child_tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+
+        # リストの階層管理
+        next_depth = depth
+        if child_tag == 'ItemList':
+            next_depth = depth + 1
+
+        child_text = extract_text_from_element(child, ns, next_depth)
+
         if child_text:
-            texts.append(child_text)
+            if child_tag == 'Item':
+                # 箇条書きのフォーマット
+                indent = "  " * depth
+                # 最初の要素には改行をつける
+                texts.append(f"\n{indent}- {child_text}")
+            elif child_tag in ['Caption', 'GenericNameHeader', 'ItemCaption']:
+                # 見出し的なものは太字に
+                texts.append(f"**{child_text}**")
+            elif child_tag in ['Table']:
+                 # テーブルはすでに整形されているのでそのまま追加
+                 texts.append(f"\n{child_text}\n")
+            else:
+                texts.append(child_text)
 
         # 要素の後のテール部分も含める
-        if child.tail:
+        if child.tail and child.tail.strip():
             texts.append(child.tail.strip())
 
-    result = ' '.join([t for t in texts if t])
-    return result if result else None
+    # 連結処理
+    # 基本はスペースで連結するが、改行が含まれている場合（Itemなど）の処理
+    result = ""
+    for t in texts:
+        if t.startswith('\n'):
+            result += t
+        elif result and not result.endswith('\n') and not t.startswith('\n'):
+            result += " " + t
+        else:
+            result += t
+
+    # 先頭の改行は保持しないとMarkdownの構造が壊れる場合があるが、
+    # strip()するとインデントも消えてしまうため、右側のみstripする。
+    # ただし、全体の先頭の空白は削除しても良いことが多いが、
+    # 再帰呼び出しの結果として返る場合、親側で結合されるため、
+    # ここでのstripは慎重に行う必要がある。
+    # 今回のロジックでは、Itemは\nで始まるため、それを消さないようにする。
+
+    return result.rstrip() if result else None
 
 def parse_xml_file(xml_path):
     """
@@ -225,19 +333,27 @@ def parse_xml_file(xml_path):
 
 if __name__ == '__main__':
     # テスト
-    xml_file = 'data/PMDAraw/pmda_all_20251122/SGML_XML/クエチアピン錠２００ｍｇ「ＦＦＰ」/300166_1179042F1062_2_05.xml'
+    # xml_file = 'data/PMDAraw/pmda_all_20251122/SGML_XML/クエチアピン錠２００ｍｇ「ＦＦＰ」/300166_1179042F1062_2_05.xml'
+    xml_file = 'test_data.xml'
 
-    medicine_info, interaction_info = parse_xml_file(xml_file)
+    if os.path.exists(xml_file):
+        medicine_info, interaction_info = parse_xml_file(xml_file)
 
-    if medicine_info:
-        print("=== 抽出された医薬品情報 ===")
-        for key, value in medicine_info.items():
-            if value:
-                display_value = value[:100] + "..." if len(str(value)) > 100 else value
-                print(f"{key}: {display_value}")
+        if medicine_info:
+            print("=== 抽出された医薬品情報 ===")
+            for key, value in medicine_info.items():
+                if value:
+                    display_value = value[:100] + "..." if len(str(value)) > 100 else value
+                    print(f"{key}: {display_value}")
 
-        print(f"\n=== 抽出された相互作用情報 ===")
-        print(f"相互作用件数: {len(interaction_info)}")
-        for i, interaction in enumerate(interaction_info[:3]):
-            print(f"\n{i+1}. {interaction['target_name']}")
-            print(f"   {interaction['description'][:100]}...")
+            if medicine_info.get('side_effects'):
+                print("\n--- 副作用（整形後）---")
+                print(medicine_info['side_effects'])
+
+            print(f"\n=== 抽出された相互作用情報 ===")
+            print(f"相互作用件数: {len(interaction_info)}")
+            for i, interaction in enumerate(interaction_info[:3]):
+                print(f"\n{i+1}. {interaction['target_name']}")
+                print(f"   {interaction['description'][:100]}...")
+    else:
+        print(f"File not found: {xml_file}")
