@@ -49,6 +49,15 @@ def parse_xml_file(xml_path):
             "dosage": None,
             "contraindications": None,
             "side_effects": None,
+            "warnings": None,
+            "important_precautions": None,
+            "efficacy_precautions": None,
+            "pregnancy_precautions": None,
+            "pediatric_precautions": None,
+            "elderly_precautions": None,
+            "other_precautions": None,
+            "pharmacokinetics": None,
+            "storage": None,
             "source_file": os.path.basename(xml_path),
         }
 
@@ -111,6 +120,53 @@ def parse_xml_file(xml_path):
         adverse_elem = root.find('.//p:AdverseEvents', ns)
         if adverse_elem is not None:
             medicine_data["side_effects"] = extract_text_from_element(adverse_elem, ns)
+
+        # 警告
+        warnings_elem = root.find('.//p:Warnings', ns)
+        if warnings_elem is not None:
+            medicine_data["warnings"] = extract_text_from_element(warnings_elem, ns)
+
+        # 重要な基本的注意
+        important_prec_elem = root.find('.//p:ImportantPrecautions', ns)
+        if important_prec_elem is not None:
+            medicine_data["important_precautions"] = extract_text_from_element(important_prec_elem, ns)
+
+        # 効能関連の注意
+        efficacy_prec_elem = root.find('.//p:EfficacyRelatedPrecautions', ns)
+        if efficacy_prec_elem is not None:
+            medicine_data["efficacy_precautions"] = extract_text_from_element(efficacy_prec_elem, ns)
+
+        # 妊婦・授乳婦への注意
+        pregnancy_elem = root.find('.//p:PrecautionsForPregnancyLactation', ns)
+        if pregnancy_elem is not None:
+            medicine_data["pregnancy_precautions"] = extract_text_from_element(pregnancy_elem, ns)
+
+        # 小児等への投与
+        pediatric_elem = root.find('.//p:PediatricUse', ns)
+        if pediatric_elem is not None:
+            medicine_data["pediatric_precautions"] = extract_text_from_element(pediatric_elem, ns)
+
+        # 高齢者への投与
+        elderly_elem = root.find('.//p:PrecautionsForElderlyUse', ns)
+        if elderly_elem is not None:
+            medicine_data["elderly_precautions"] = extract_text_from_element(elderly_elem, ns)
+
+        # その他の注意
+        other_prec_elem = root.find('.//p:OtherPrecautions', ns)
+        if other_prec_elem is not None:
+            medicine_data["other_precautions"] = extract_text_from_element(other_prec_elem, ns)
+
+        # 薬物動態
+        pharmacokinetics_elem = root.find('.//p:Pharmacokinetics', ns)
+        if pharmacokinetics_elem is not None:
+            medicine_data["pharmacokinetics"] = extract_text_from_element(pharmacokinetics_elem, ns)
+
+        # 保管方法
+        storage_elem = root.find('.//p:Storage', ns)
+        if storage_elem is None:
+            storage_elem = root.find('.//p:StorageMethod', ns)
+        if storage_elem is not None:
+            medicine_data["storage"] = extract_text_from_element(storage_elem, ns)
 
         # 相互作用
         interactions_elem = root.find('.//p:Interactions', ns)
