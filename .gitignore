@@ -3,6 +3,8 @@
 
 # Data files (raw and processed)
 data/
+pmdadata/
+
 
 # Python cache
 __pycache__/
