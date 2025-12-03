@@ -213,6 +213,8 @@ pip install -r requirements.txt
 
 データベースファイル `pmda.sqlite` が既に含まれていますが、自分で再構築したい場合：
 
+#### 従来版（pmda.sqlite）
+
 ```bash
 # 1. データベーススキーマを作成
 python3 src/db_setup.py
@@ -227,25 +229,55 @@ python3 src/load_pdf_only_data.py
 python3 src/update_additional_fields.py
 ```
 
+#### 改善版（pmda_v2.sqlite）- 規格分離版 🆕
+
+規格（剤形・含有量）ごとに検索しやすい改善版データベース：
+
+```bash
+# 1. データベーススキーマを作成
+python3 src/db_setup_v2.py
+
+# 2. XMLデータをロード（テスト用：100件）
+python3 src/load_data_v2.py 100
+
+# 3. 全件ロード（約13,400件、15〜20分）
+python3 src/load_data_v2.py
+```
+
+詳細は [docs/SETUP_V2.md](docs/SETUP_V2.md) を参照してください。
+
 ## 📁 プロジェクト構造
 
 ```
 PMDA-SQlite/
-├── pmda.sqlite              # SQLiteデータベース（約48MB）
+├── pmda.sqlite              # 従来版SQLiteデータベース（約120MB）
+├── pmda_v2.sqlite           # 改善版データベース（規格分離版）
 ├── README.md                # このファイル
+├── CLAUDE.md                # Claude Code用のガイド
 ├── requirements.txt         # Python依存パッケージ
 ├── data/
 │   └── PMDAraw/
 │       └── pmda_all_20251122/
 │           ├── SGML_XML/   # XMLファイル（13,432件）
 │           └── PDF/        # PDFファイル（13,572件）
-└── src/
-    ├── db_setup.py                  # データベーススキーマ作成
-    ├── parse_xml_data.py            # XMLパーサー
-    ├── load_all_data_to_db.py       # XMLデータ投入
-    ├── load_pdf_only_data.py        # PDF専用データ投入
-    ├── update_additional_fields.py  # 追加フィールド更新
-    └── check_db_data.py             # データベース確認
+├── src/
+│   ├── db_setup.py                  # 従来版スキーマ作成
+│   ├── db_setup_v2.py               # 改善版スキーマ作成 🆕
+│   ├── parse_xml_data.py            # XMLパーサー
+│   ├── parse_product_name.py        # 製品名パーサー（規格抽出）🆕
+│   ├── load_all_data_to_db.py       # 従来版データ投入
+│   ├── load_data_v2.py              # 改善版データ投入 🆕
+│   ├── load_pdf_only_data.py        # PDF専用データ投入
+│   ├── update_additional_fields.py  # 追加フィールド更新
+│   └── check_db_data.py             # データベース確認
+├── docs/
+│   ├── DATABASE_SCHEMA.md           # 従来版スキーマ詳細
+│   ├── IMPROVED_SCHEMA.md           # 改善版スキーマ設計 🆕
+│   └── SETUP_V2.md                  # 改善版セットアップ手順 🆕
+└── examples/
+    ├── basic_search.py              # 基本検索サンプル
+    ├── search_by_specification.py   # 規格検索サンプル 🆕
+    └── [その他のサンプル]
 ```
 
 ## 🔍 使用例
