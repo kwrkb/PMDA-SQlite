@@ -12,6 +12,7 @@ __pycache__/
 
 # SQLite database file
 *.sqlite
+*.sqlite-journal
 *.db
 
 # Log files
@@ -22,3 +23,6 @@ load_log.txt
 # IDE/Editor specific
 .idea/
 .vscode/
+
+# Large PDF files
+*.pdf

@@ -39,6 +39,10 @@ PMDA（独立行政法人 医薬品医療機器総合機構）の医薬品添付
 | `storage` | TEXT | 保管方法 |
 | `source_file` | TEXT | データソース（XMLファイル名 または PDF:ファイル名） |
 | `created_at` | TIMESTAMP | 登録日時 |
+| **フェーズ1追加フィールド** | | |
+| `regulatory_classification` | TEXT | 規制区分（劇薬、処方箋医薬品など） |
+| `composition` | TEXT | 組成・性状（有効成分、添加物、剤形の詳細） |
+| `overdosage` | TEXT | 過量投与時の症状と処置 |
 
 ### `interactions` テーブル
 
@@ -187,6 +191,58 @@ print(f"相互作用データ: {total_interactions:,}件")
 conn.close()
 ```
 
+### 規制区分での検索（フェーズ1フィールド）🆕
+
+```python
+import sqlite3
+
+conn = sqlite3.connect('pmda.sqlite')
+cur = conn.cursor()
+
+# 劇薬を検索
+cur.execute("""
+    SELECT product_name, regulatory_classification
+    FROM medicines
+    WHERE regulatory_classification LIKE '%劇薬%'
+    LIMIT 10
+""")
+
+print("【劇薬一覧】\n")
+for row in cur.fetchall():
+    print(f"製品名: {row[0]}")
+    print(f"区分: {row[1]}")
+    print()
+
+conn.close()
+```
+
+### 組成情報の検索（フェーズ1フィールド）🆕
+
+```python
+import sqlite3
+
+conn = sqlite3.connect('pmda.sqlite')
+cur = conn.cursor()
+
+# 特定の有効成分を含む医薬品を検索
+ingredient = "インスリン"
+
+cur.execute("""
+    SELECT product_name, composition
+    FROM medicines
+    WHERE composition LIKE ?
+    LIMIT 5
+""", (f'%{ingredient}%',))
+
+print(f"【{ingredient}を含む医薬品】\n")
+for row in cur.fetchall():
+    print(f"製品名: {row[0]}")
+    print(f"組成: {row[1][:200]}...")
+    print()
+
+conn.close()
+```
+
 ## 🛠️ セットアップ
 
 ### 必要なもの
@@ -246,6 +302,25 @@ python3 src/load_data_v2.py
 
 詳細は [docs/SETUP_V2.md](docs/SETUP_V2.md) を参照してください。
 
+## 🔄 データの更新・メンテナンス
+
+PMDAは添付文書を定期的に更新しています。**月次での更新**を推奨します。
+
+### 更新方法
+
+```bash
+# 1. 最新データをダウンロード（PMDAウェブサイトから）
+
+# 2. データベースをバックアップ
+cp pmda_v2.sqlite backups/pmda_v2_$(date +%Y%m%d).sqlite
+
+# 3. データベースを再構築
+python3 src/db_setup_v2.py
+python3 src/load_data_v2.py
+```
+
+詳細は [docs/MAINTENANCE.md](docs/MAINTENANCE.md) を参照してください。
+
 ## 📁 プロジェクト構造
 
 ```
@@ -273,7 +348,9 @@ PMDA-SQlite/
 ├── docs/
 │   ├── DATABASE_SCHEMA.md           # 従来版スキーマ詳細
 │   ├── IMPROVED_SCHEMA.md           # 改善版スキーマ設計 🆕
-│   └── SETUP_V2.md                  # 改善版セットアップ手順 🆕
+│   ├── SETUP_V2.md                  # 改善版セットアップ手順 🆕
+│   ├── MAINTENANCE.md               # 運用・メンテナンスガイド 🆕
+│   └── PHASE1_IMPLEMENTATION.md     # フェーズ1実装ドキュメント 🆕
 └── examples/
     ├── basic_search.py              # 基本検索サンプル
     ├── search_by_specification.py   # 規格検索サンプル 🆕
@@ -299,6 +376,7 @@ sqlite3 pmda.sqlite "SELECT COUNT(*) FROM medicines WHERE side_effects LIKE '%�
 
 - PMDA（独立行政法人 医薬品医療機器総合機構）
 - 添付文書データ: 2025年11月22日取得
+- **データ更新推奨**: 月次更新（詳細は [docs/MAINTENANCE.md](docs/MAINTENANCE.md)）
 
 ## ⚠️ 注意事項
 
@@ -317,4 +395,5 @@ sqlite3 pmda.sqlite "SELECT COUNT(*) FROM medicines WHERE side_effects LIKE '%�
 
 ---
 
-**生成日**: 2025年11月22日
+**最終更新**: 2025年12月5日
+**データスナップショット**: 2025年11月22日
