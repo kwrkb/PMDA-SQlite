@@ -9,7 +9,7 @@ import sqlite3
 import os
 from glob import glob
 from typing import Dict, List, Tuple, Optional
-from parse_xml_data import parse_xml_file
+from parse_xml_data_lxml import parse_xml_file
 from parse_product_name import parse_product_name
 
 DB_NAME = 'pmda_v2.sqlite'
@@ -55,7 +55,9 @@ def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Optiona
             'important_precautions', 'efficacy_precautions',
             'pregnancy_precautions', 'pediatric_precautions',
             'elderly_precautions', 'other_precautions',
-            'pharmacokinetics'
+            'pharmacokinetics',
+            # フェーズ1: 追加フィールド
+            'regulatory_classification', 'composition', 'overdosage'
         ]
 
         values = {col: medicine_data.get(col) for col in columns}
