@@ -4,11 +4,13 @@ PMDA（独立行政法人 医薬品医療機器総合機構）の医薬品添付
 
 ## 📊 データベース概要
 
-- **医薬品総数**: 13,576件
-  - XML由来: 13,432件
-  - PDF専用: 140件
-- **薬物相互作用データ**: 11,761件
-- **データベースファイル**: `pmda.sqlite` (約48MB)
+- **医薬品総数**: 約13,500件（XMLソースによる）
+- **薬物相互作用データ**: 約12,000件
+- **対応スキーマ**:
+  - `pmda.sqlite` - 従来版（フラット構造）
+  - `pmda_v2.sqlite` - 改善版（規格分離、推奨）
+
+**注意**: データベースファイルはリポジトリに含まれていません。[セットアップ手順](#%EF%B8%8F-セットアップ)に従ってPMDAからデータをダウンロードし、構築してください。
 
 ## 🗂️ データベーススキーマ
 
@@ -249,55 +251,73 @@ conn.close()
 
 - Python 3.8以上
 - 必要なパッケージ（`requirements.txt`参照）
+- PMDAの添付文書XMLデータ
 
-### インストール
+### クイックスタート（ゼロから始める場合）
 
 ```bash
-# リポジトリをクローン
-git clone <repository-url>
+# 1. リポジトリをクローン
+git clone https://github.com/kwrkb/PMDA-SQlite.git
 cd PMDA-SQlite
 
-# 仮想環境の作成
+# 2. 仮想環境の作成と有効化
 python3 -m venv .venv
 source .venv/bin/activate  # Windowsの場合: .venv\Scripts\activate
 
-# 依存パッケージのインストール
+# 3. 依存パッケージのインストール
 pip install -r requirements.txt
+
+# 4. PMDAデータのダウンロード（下記参照）
+
+# 5. データベース構築（推奨：v2スキーマ）
+python3 src/db_setup_v2.py
+python3 src/load_data_v2.py      # 全件ロード（約15-20分）
 ```
 
-### データベースの作成（オプション）
+### PMDAデータのダウンロード
 
-データベースファイル `pmda.sqlite` が既に含まれていますが、自分で再構築したい場合：
+**注意**: データベースファイルとXMLソースデータはリポジトリに含まれていません。以下の手順でPMDAからダウンロードしてください。
+
+1. [PMDA 添付文書情報ダウンロード](https://www.pmda.go.jp/PmdaSearch/iyakuSearch/) にアクセス
+2. 「全件ダウンロード」からSGML/XMLデータをダウンロード
+3. ダウンロードしたファイルを解凍し、以下の構造で配置：
+
+```
+data/
+└── PMDAraw/
+    └── pmda_all_YYYYMMDD/    # 日付は任意
+        └── SGML_XML/         # XMLファイル群（約13,000件）
+```
+
+4. `src/load_data_v2.py` 内の `XML_SOURCE_DIR` を必要に応じて修正：
+```python
+XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_YYYYMMDD/SGML_XML'
+```
+
+### データベースの構築
+
+#### 推奨：改善版（pmda_v2.sqlite）- 規格分離版
+
+規格（剤形・含有量）ごとに検索しやすい改善版データベース。1つのXMLから複数規格を自動抽出します。
+
+```bash
+# スキーマ作成
+python3 src/db_setup_v2.py
+
+# テスト用：10件だけロード
+python3 src/load_data_v2.py 10
+
+# 全件ロード（約13,400件、15〜20分）
+python3 src/load_data_v2.py
+```
 
 #### 従来版（pmda.sqlite）
 
 ```bash
-# 1. データベーススキーマを作成
 python3 src/db_setup.py
-
-# 2. XMLデータをロード
 python3 src/load_all_data_to_db.py
-
-# 3. PDF専用データを追加
-python3 src/load_pdf_only_data.py
-
-# 4. 追加フィールドを更新
-python3 src/update_additional_fields.py
-```
-
-#### 改善版（pmda_v2.sqlite）- 規格分離版 🆕
-
-規格（剤形・含有量）ごとに検索しやすい改善版データベース：
-
-```bash
-# 1. データベーススキーマを作成
-python3 src/db_setup_v2.py
-
-# 2. XMLデータをロード（テスト用：100件）
-python3 src/load_data_v2.py 100
-
-# 3. 全件ロード（約13,400件、15〜20分）
-python3 src/load_data_v2.py
+python3 src/load_pdf_only_data.py        # PDF専用データ
+python3 src/update_additional_fields.py  # 追加フィールド
 ```
 
 詳細は [docs/SETUP_V2.md](docs/SETUP_V2.md) を参照してください。
@@ -395,5 +415,5 @@ sqlite3 pmda.sqlite "SELECT COUNT(*) FROM medicines WHERE side_effects LIKE '%�
 
 ---
 
-**最終更新**: 2025年12月5日
-**データスナップショット**: 2025年11月22日
+**最終更新**: 2026年1月15日
+**対応PMDAデータ**: 2025年11月22日版で動作確認済み
