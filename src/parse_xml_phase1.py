@@ -267,8 +267,8 @@ if __name__ == '__main__':
     else:
         # デフォルトテストファイル
         test_files = [
-            'data/PMDAraw/pmda_all_20251122/SGML_XML/「ビケンＨＡ」/630144_631340FA1047_1_36.xml',
-            'data/PMDAraw/pmda_all_20251122/SGML_XML/ミカムロ配合錠ＡＰ/650168_2149117F1025_1_25.xml',
+            'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML/「ビケンＨＡ」/630144_631340FA1047_1_36.xml',
+            'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML/ミカムロ配合錠ＡＰ/650168_2149117F1025_1_25.xml',
         ]
 
         for xml_file in test_files:

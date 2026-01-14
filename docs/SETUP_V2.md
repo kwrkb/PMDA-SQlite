@@ -256,7 +256,7 @@ python3 src/db_setup_v2.py
 XMLファイルは以下のディレクトリに配置してください：
 
 ```
-data/PMDAraw/pmda_all_20251122/SGML_XML/
+data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML/
 ```
 
 ### パース エラーが多発する

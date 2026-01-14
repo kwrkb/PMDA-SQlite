@@ -409,7 +409,7 @@ def parse_xml_file(xml_path):
 python3 src/parse_xml_phase1.py
 
 # サンプルXMLファイルでテスト
-python3 src/parse_xml_phase1.py "data/PMDAraw/pmda_all_20251122/SGML_XML/「ビケンＨＡ」/630144_631340FA1047_1_36.xml"
+python3 src/parse_xml_phase1.py "data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML/「ビケンＨＡ」/630144_631340FA1047_1_36.xml"
 ```
 
 ### 期待される出力

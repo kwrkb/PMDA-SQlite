@@ -285,13 +285,13 @@ python3 src/load_data_v2.py      # 全件ロード（約15-20分）
 ```
 data/
 └── PMDAraw/
-    └── pmda_all_YYYYMMDD/    # 日付は任意
-        └── SGML_XML/         # XMLファイル群（約13,000件）
+    └── pmda_all_sgml_xml_YYYYMMDD/    # 例: pmda_all_sgml_xml_20260114
+        └── SGML_XML/                   # XMLファイル群（約13,000件）
 ```
 
 4. `src/load_data_v2.py` 内の `XML_SOURCE_DIR` を必要に応じて修正：
 ```python
-XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_YYYYMMDD/SGML_XML'
+XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_sgml_xml_YYYYMMDD/SGML_XML'
 ```
 
 ### データベースの構築
@@ -352,7 +352,7 @@ PMDA-SQlite/
 ├── requirements.txt         # Python依存パッケージ
 ├── data/
 │   └── PMDAraw/
-│       └── pmda_all_20251122/
+│       └── pmda_all_sgml_xml_20260114/
 │           ├── SGML_XML/   # XMLファイル（13,432件）
 │           └── PDF/        # PDFファイル（13,572件）
 ├── src/

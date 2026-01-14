@@ -15,7 +15,7 @@ from parse_product_name import parse_product_name
 import time
 
 DB_NAME = 'pmda_v2.sqlite'
-XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_20251122/SGML_XML'
+XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 
 
 def get_existing_revisions(conn: sqlite3.Connection) -> Dict[str, str]:

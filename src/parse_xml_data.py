@@ -333,7 +333,7 @@ def parse_xml_file(xml_path):
 
 if __name__ == '__main__':
     # テスト
-    # xml_file = 'data/PMDAraw/pmda_all_20251122/SGML_XML/クエチアピン錠２００ｍｇ「ＦＦＰ」/300166_1179042F1062_2_05.xml'
+    # xml_file = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML/クエチアピン錠２００ｍｇ「ＦＦＰ」/300166_1179042F1062_2_05.xml'
     xml_file = 'test_data.xml'
 
     if os.path.exists(xml_file):

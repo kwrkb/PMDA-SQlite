@@ -618,7 +618,7 @@ if __name__ == '__main__':
         xml_file = sys.argv[1]
     else:
         # デフォルトのテストファイル（複数規格を持つもの）
-        xml_file = 'data/PMDAraw/pmda_all_20251122/SGML_XML/ミッドペリックＬ４００腹膜透析液/470034_3420429A1044_1_05.xml'
+        xml_file = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML/ミッドペリックＬ４００腹膜透析液/470034_3420429A1044_1_05.xml'
 
     if os.path.exists(xml_file):
         print(f"パース中: {xml_file}\n")

@@ -94,7 +94,7 @@ python3 examples/search_by_specification.py   # V2 schema queries
 
 ### XML Processing Flow
 
-1. **Source:** `data/PMDAraw/pmda_all_20251122/SGML_XML/` (13,432 XML files)
+1. **Source:** `data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML/` (13,432 XML files)
 2. **Parse:**
    - `parse_xml_data_lxml.py` - **Recommended** lxml-based parser (faster, Phase 1 support, multi-product extraction)
    - `parse_xml_data.py` - Legacy ElementTree parser
