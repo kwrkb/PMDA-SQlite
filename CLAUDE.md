@@ -24,21 +24,21 @@ The project maintains two database implementations:
 **Improved (`pmda_v2.sqlite`):** (Recommended)
 - 3 tables: `medicines`, `specifications`, `interactions`
 - Medicine information (efficacy, contraindications, etc.) stored once per active ingredient
-- Product specifications (dosage form, strength) stored separately
+- Product specifications (dosage form, strength, regulatory info) stored separately
 - Enables queries like "all 10mg tablets" or "compare dosage forms for aspirin"
-- **Phase 1 fields**: regulatory_classification, composition, overdosage (added Dec 2025)
+- Additional specification fields: `yj_code`, `approval_no`, `storage`, `shelf_life`, `marketing_date`
+- Interaction severity tracking: `severity` field ('contraindication' | 'precaution')
 
 ### Key Design Pattern: Specification Separation
 
 The v2 schema recognizes that multiple products (e.g., "Drug X 10mg tablet", "Drug X 50mg tablet") share the same package insert information. This is modeled as:
-- One `medicines` record with shared information (generic_name, indications, contraindications, warnings, precautions, pharmacokinetics, regulatory_classification, composition, overdosage)
-- Multiple `specifications` records for each product variant (product_name, dosage_form, strength, strength_unit)
+- One `medicines` record with shared information (generic_name, indications, contraindications, warnings, precautions, pharmacokinetics, overdosage)
+- Multiple `specifications` records for each product variant (product_name, dosage_form, strength, strength_unit, regulatory_classification, composition, yj_code, etc.)
 - `interactions` linked to medicine (not specification) since drug interactions are ingredient-level
 
-**Phase 1 Fields** (medicines table):
-- `regulatory_classification`: 劇薬, 処方箋医薬品, etc. (~65% populated)
-- `composition`: Active ingredients, additives, formulation details (~100% populated)
-- `overdosage`: Overdose symptoms and treatment (sparse - mainly for oral/injectable drugs)
+**Key Field Locations**:
+- `overdosage`: **medicines** table (shared across all product variants)
+- `regulatory_classification`, `composition`: **specifications** table (per-product, as classification may vary by formulation)
 
 ## Common Commands
 
@@ -67,11 +67,11 @@ python3 migrations/add_phase1_fields_v2.py        # Add columns
 python3 src/update_phase1_fields_v2.py            # Populate data (~60 min)
 ```
 
-### Testing Product Name Parser
+### Testing
 
-The product name parser extracts structured data from Japanese product names:
+No formal test framework is used. Tests are built into individual modules:
 ```bash
-python3 src/parse_product_name.py          # Run test suite
+python3 src/parse_product_name.py          # Run product name parser tests
 ```
 
 Handles patterns like:
@@ -96,10 +96,32 @@ python3 examples/search_by_specification.py   # V2 schema queries
 
 1. **Source:** `data/PMDAraw/pmda_all_20251122/SGML_XML/` (13,432 XML files)
 2. **Parse:**
-   - `parse_xml_data_lxml.py` - **Recommended** lxml-based parser (faster, Phase 1 support)
+   - `parse_xml_data_lxml.py` - **Recommended** lxml-based parser (faster, Phase 1 support, multi-product extraction)
    - `parse_xml_data.py` - Legacy ElementTree parser
    - `parse_xml_phase1.py` - Phase 1 field extractors (regulatory_classification, composition, overdosage)
 3. **Load:** Data inserted into SQLite via `load_all_data_to_db.py` or `load_data_v2.py`
+
+### Multi-Product XML Support (v2 Parser)
+
+Some XML files contain multiple product specifications (e.g., different volumes or strengths). The v2 parser (`parse_xml_data_lxml.py`) handles this:
+
+- **Return type:** `(list[dict], list[dict])` - multiple medicines and shared interactions
+- **Structure:** Each `DetailBrandName` element becomes a separate product entry
+- **Common data:** Generic name, efficacy, contraindications, etc. are shared across all products
+- **Product-specific data:** product_name, yj_code, approval_no, storage, regulatory_classification
+
+Example: A peritoneal dialysis fluid XML may contain 19 different volume variants (1L, 1.5L, 2L, etc.)
+
+### Generic Name Extraction Logic
+
+The parser uses a priority-based extraction for `generic_name`:
+
+1. `GenericName/Detail/Lang` - Primary source
+2. `GenericName//Lang` - Fallback for nested structures
+3. `GenericName` element full text
+4. `TherapeuticClassification` - Final fallback (only if GenericName is empty or invalid)
+
+**Invalid values filtered:** `-`, `－`, `―`, empty strings. These trigger fallback to TherapeuticClassification.
 
 ### PDF Fallback
 
@@ -147,17 +169,23 @@ Drug interactions are stored at the medicine (ingredient) level, not specificati
 ```
 src/
 ├── db_setup.py                    # Legacy schema
-├── db_setup_v2.py                 # V2 schema (includes Phase 1)
-├── parse_xml_data_lxml.py         # lxml parser (recommended, Phase 1 support)
+├── db_setup_v2.py                 # V2 schema (recommended)
+├── parse_xml_data_lxml.py         # lxml parser (recommended)
+├── parse_xml_data.py              # Legacy ElementTree parser
 ├── parse_xml_phase1.py            # Phase 1 field extractors
-├── parse_product_name.py          # Product name → specification parser
+├── parse_product_name.py          # Product name → specification parser (has built-in tests)
+├── load_all_data_to_db.py         # Legacy data loading
 ├── load_data_v2.py                # V2 data loading with deduplication
-├── update_phase1_fields_v2.py     # Update existing data with Phase 1
+├── update_phase1_fields.py        # Update legacy DB with Phase 1 fields
+├── update_phase1_fields_v2.py     # Update V2 DB with Phase 1 fields
 ├── update_changed_data_v2.py      # Differential update (template)
-└── extract_pdf_data.py            # OCR for PDF-only products
+├── analyze_xml_structure.py       # XML structure analysis tool
+├── extract_pdf_data.py            # OCR for PDF-only products
+└── transform_extracted_data.py    # Convert OCR output to DB format
 
 migrations/
-├── add_phase1_fields_v2.py        # Add Phase 1 columns to existing v2 DB
+├── add_phase1_fields.py           # Add Phase 1 columns to legacy DB
+└── add_phase1_fields_v2.py        # Add Phase 1 columns to V2 DB
 
 docs/
 ├── MAINTENANCE.md                 # Operations guide (monthly updates)
@@ -165,6 +193,8 @@ docs/
 ├── SPECIFICATION_COMPLIANCE.md    # PMDA XML spec compliance
 ├── XML_NAMESPACE.md               # XML namespace guide
 ├── IMPROVED_SCHEMA.md             # V2 schema design rationale
+├── FINAL_SCHEMA.md                # Final schema with all fields (YJ code, approval_no, etc.)
+├── DATABASE_SCHEMA.md             # Legacy schema documentation
 └── SETUP_V2.md                    # V2 setup guide
 ```
 
@@ -189,6 +219,18 @@ SELECT s.* FROM medicines m
 JOIN specifications s ON m.id = s.medicine_id
 WHERE m.generic_name LIKE '%アスピリン%'
 ORDER BY s.dosage_form, s.strength
+
+-- Products by YJ code
+SELECT s.product_name, s.yj_code, m.generic_name
+FROM specifications s
+JOIN medicines m ON s.medicine_id = m.id
+WHERE s.yj_code LIKE '1179%'
+
+-- Contraindicated drug interactions
+SELECT m.generic_name, i.target_name, i.description
+FROM medicines m
+JOIN interactions i ON m.id = i.medicine_id
+WHERE i.severity = 'contraindication'
 ```
 
 ## Testing Data
@@ -228,10 +270,12 @@ Many fields may be NULL:
 - PDF-only products have minimal data (product_name only)
 - Not all XML files contain all fields
 - V2 schema: Products without parseable strength have NULL strength/strength_unit
-- Phase 1 fields:
+- V2 specifications fields:
   - `regulatory_classification`: ~35% NULL (not all drugs have special classifications)
   - `composition`: <1% NULL (almost universal)
-  - `overdosage`: ~100% NULL (sparse - mainly vaccines/topicals don't have overdose info)
+  - `yj_code`, `approval_no`: may be NULL for older products
+- V2 medicines fields:
+  - `overdosage`: mostly NULL (sparse - mainly vaccines/topicals don't have overdose info)
 
 Always use `IS NULL` checks in queries.
 

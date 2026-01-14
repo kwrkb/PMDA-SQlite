@@ -3,6 +3,8 @@
 
 同じ添付文書の情報は medicines テーブルに1レコード、
 規格違いは specifications テーブルに複数レコードとして格納します。
+
+v2 改修: 1つのXMLから複数の製品データを抽出し、すべて登録
 """
 
 import sqlite3
@@ -12,7 +14,7 @@ from typing import Dict, List, Tuple, Optional
 from parse_xml_data_lxml import parse_xml_file
 from parse_product_name import parse_product_name
 
-DB_NAME = 'pmda_v2.sqlite'
+DB_NAME = 'data/pmda_v2.sqlite'
 XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_20251122/SGML_XML'
 
 def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Optional[int]:
@@ -48,16 +50,14 @@ def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Optiona
 
     # 新規挿入
     try:
-        # medicines テーブルに挿入するカラム
+        # medicines テーブルに挿入するカラム（V2スキーマに合わせる）
         columns = [
-            'generic_name', 'manufacturer', 'jsc_code',
-            'indications', 'contraindications', 'warnings',
+            'generic_name', 'manufacturer', 'revision_date', 'source_file',
+            'indications', 'dosage', 'contraindications', 'warnings',
             'important_precautions', 'efficacy_precautions',
             'pregnancy_precautions', 'pediatric_precautions',
             'elderly_precautions', 'other_precautions',
-            'pharmacokinetics',
-            # フェーズ1: 追加フィールド
-            'regulatory_classification', 'composition', 'overdosage'
+            'overdosage', 'pharmacokinetics'
         ]
 
         values = {col: medicine_data.get(col) for col in columns}
@@ -77,7 +77,7 @@ def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Optiona
 
 def insert_specification(cur: sqlite3.Cursor, medicine_id: int, spec_data: Dict) -> bool:
     """
-    規格情報を specifications テーブルに挿入します。
+    規格情報を specifications テーブルに挿入します（V2スキーマ準拠）。
 
     Args:
         cur: データベースカーソル
@@ -89,24 +89,25 @@ def insert_specification(cur: sqlite3.Cursor, medicine_id: int, spec_data: Dict)
     """
     try:
         cur.execute("""
-            INSERT INTO specifications (
-                medicine_id, product_name,
-                dosage_form, strength, strength_unit, package_size,
-                dosage, side_effects, storage,
-                revision_date, source_file
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO specifications (
+                medicine_id, product_name, yj_code, approval_no,
+                dosage_form, strength, strength_unit,
+                regulatory_classification, storage, shelf_life, marketing_date,
+                composition
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             medicine_id,
             spec_data.get('product_name'),
+            spec_data.get('yj_code'),
+            spec_data.get('approval_no'),
             spec_data.get('dosage_form'),
             spec_data.get('strength'),
             spec_data.get('strength_unit'),
-            spec_data.get('package_size'),
-            spec_data.get('dosage'),
-            spec_data.get('side_effects'),
+            spec_data.get('regulatory_classification'),
             spec_data.get('storage'),
-            spec_data.get('revision_date'),
-            spec_data.get('source_file'),
+            spec_data.get('shelf_life'),
+            spec_data.get('marketing_date'),
+            spec_data.get('composition'),
         ))
         return True
     except sqlite3.IntegrityError as e:
@@ -132,7 +133,7 @@ def insert_interactions(cur: sqlite3.Cursor, medicine_id: int, interactions: Lis
                 medicine_id,
                 interaction.get('target_name'),
                 interaction.get('description'),
-                None  # severity は将来実装
+                interaction.get('severity')  # severity 対応
             ))
         except Exception as e:
             print(f"  ✗ 相互作用データ挿入エラー: {e}")
@@ -141,59 +142,78 @@ def insert_interactions(cur: sqlite3.Cursor, medicine_id: int, interactions: Lis
 def process_xml_file(xml_file: str, conn: sqlite3.Connection) -> Tuple[bool, str]:
     """
     XMLファイルを処理してデータベースに登録します。
+    1つのXMLから複数の製品データを抽出し、すべて登録します。
 
     Args:
         xml_file: XMLファイルパス
         conn: データベース接続
 
     Returns:
-        (成功したか, エラーメッセージ)
+        (成功したか, メッセージ)
     """
     cur = conn.cursor()
 
     try:
-        # XMLから医薬品情報を抽出
-        medicine_info, interaction_info = parse_xml_file(xml_file)
+        # XMLから医薬品情報を抽出（複数製品対応）
+        medicines_info, interaction_info = parse_xml_file(xml_file)
 
-        if not medicine_info or not medicine_info.get('product_name'):
-            return False, "製品名が抽出できませんでした"
+        if not medicines_info:
+            return False, "製品データが抽出できませんでした"
 
-        # 製品名から規格情報を抽出
-        product_name = medicine_info['product_name']
-        spec_info = parse_product_name(product_name)
+        # 処理結果を記録
+        medicine_ids_created = set()
+        spec_count = 0
+        interaction_count = 0
 
-        # medicines テーブルに挿入または既存IDを取得
-        medicine_id = find_or_create_medicine(cur, medicine_info)
+        for medicine_info in medicines_info:
+            product_name = medicine_info.get('product_name')
+            if not product_name:
+                continue
 
-        if not medicine_id:
-            return False, "医薬品情報の登録に失敗"
+            # 製品名から規格情報を抽出
+            spec_info = parse_product_name(product_name)
 
-        # specifications テーブルに挿入
-        spec_data = {
-            'product_name': product_name,
-            'dosage_form': spec_info['dosage_form'],
-            'strength': spec_info['strength'],
-            'strength_unit': spec_info['strength_unit'],
-            'package_size': spec_info['package_size'],
-            'dosage': medicine_info.get('dosage'),
-            'side_effects': medicine_info.get('side_effects'),
-            'storage': medicine_info.get('storage'),
-            'revision_date': medicine_info.get('revision_date'),
-            'source_file': os.path.basename(xml_file),
-        }
+            # medicines テーブルに挿入または既存IDを取得
+            medicine_id = find_or_create_medicine(cur, medicine_info)
 
-        if not insert_specification(cur, medicine_id, spec_data):
-            return False, "規格情報の登録に失敗"
+            if not medicine_id:
+                continue
 
-        # interactions テーブルに挿入
-        insert_interactions(cur, medicine_id, interaction_info)
+            # 初めて登録した medicine_id の場合、相互作用も登録
+            if medicine_id not in medicine_ids_created:
+                medicine_ids_created.add(medicine_id)
+                insert_interactions(cur, medicine_id, interaction_info)
+                interaction_count += len(interaction_info)
+
+            # specifications テーブルに挿入（V2スキーマ準拠）
+            spec_data = {
+                'product_name': product_name,
+                'yj_code': medicine_info.get('yj_code'),
+                'approval_no': medicine_info.get('approval_no'),
+                'dosage_form': spec_info['dosage_form'],
+                'strength': spec_info['strength'],
+                'strength_unit': spec_info['strength_unit'],
+                'regulatory_classification': medicine_info.get('regulatory_classification'),
+                'storage': medicine_info.get('storage'),
+                'shelf_life': medicine_info.get('shelf_life'),
+                'marketing_date': medicine_info.get('marketing_date'),
+                'composition': medicine_info.get('composition'),
+            }
+
+            if insert_specification(cur, medicine_id, spec_data):
+                spec_count += 1
 
         conn.commit()
 
-        return True, f"medicine_id={medicine_id}, {len(interaction_info)}件の相互作用"
+        if spec_count == 0:
+            return False, "規格情報の登録に失敗"
+
+        return True, f"medicines={len(medicine_ids_created)}, specs={spec_count}, interactions={interaction_count}"
 
     except Exception as e:
         conn.rollback()
+        import traceback
+        traceback.print_exc()
         return False, str(e)
 
 

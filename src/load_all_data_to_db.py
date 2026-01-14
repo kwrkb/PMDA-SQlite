@@ -1,7 +1,7 @@
 import sqlite3
 import os
 import json
-from parse_xml_data import parse_xml_file
+from parse_xml_data_lxml import parse_xml_file
 from transform_extracted_data import transform_data
 from glob import glob
 
