@@ -10,7 +10,7 @@ import sqlite3
 import os
 from glob import glob
 from typing import Dict, Set
-from parse_xml_data_lxml import parse_xml_file
+from parse_xml_data_lxml import parse_xml_file_single as parse_xml_file
 from parse_product_name import parse_product_name
 import time
 
