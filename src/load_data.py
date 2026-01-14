@@ -11,14 +11,14 @@ import sqlite3
 import os
 from glob import glob
 from typing import Dict, List, Tuple, Optional
-from parse_xml_data_lxml import parse_xml_file
+from parse_xml import parse_xml_file
 from parse_product_name import parse_product_name
-from config import DB_V2, get_xml_source_dir
+from config import DB_PATH, get_xml_source_dir
 
-DB_NAME = DB_V2
+DB_NAME = DB_PATH
 XML_SOURCE_DIR = get_xml_source_dir() or 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 
-def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Optional[int]:
+def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Tuple[Optional[int], bool]:
     """
     医薬品情報を medicines テーブルに挿入または既存IDを取得します。
 
@@ -30,14 +30,14 @@ def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Optiona
         medicine_data: 医薬品情報（辞書形式）
 
     Returns:
-        medicine_id または None
+        (medicine_id, is_new) - IDと新規作成かどうかのタプル
     """
     generic_name = medicine_data.get('generic_name')
     manufacturer = medicine_data.get('manufacturer')
 
     if not generic_name:
         print("  ⚠ generic_name が空のためスキップ")
-        return None
+        return None, False
 
     # 既存レコードを検索
     cur.execute("""
@@ -47,7 +47,7 @@ def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Optiona
 
     existing = cur.fetchone()
     if existing:
-        return existing[0]
+        return existing[0], False
 
     # 新規挿入
     try:
@@ -69,11 +69,11 @@ def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Optiona
             [values[col] for col in columns]
         )
 
-        return cur.lastrowid
+        return cur.lastrowid, True
 
     except sqlite3.IntegrityError as e:
         print(f"  ✗ データ挿入エラー: {e}")
-        return None
+        return None, False
 
 
 def insert_specification(cur: sqlite3.Cursor, medicine_id: int, spec_data: Dict) -> bool:
@@ -175,13 +175,14 @@ def process_xml_file(xml_file: str, conn: sqlite3.Connection) -> Tuple[bool, str
             spec_info = parse_product_name(product_name)
 
             # medicines テーブルに挿入または既存IDを取得
-            medicine_id = find_or_create_medicine(cur, medicine_info)
+            medicine_id, is_new = find_or_create_medicine(cur, medicine_info)
 
             if not medicine_id:
                 continue
 
-            # 初めて登録した medicine_id の場合、相互作用も登録
-            if medicine_id not in medicine_ids_created:
+            # 新規作成した medicine の場合のみ、相互作用を登録
+            # （既存レコードを再利用する場合は、相互作用は既に登録済み）
+            if is_new:
                 medicine_ids_created.add(medicine_id)
                 insert_interactions(cur, medicine_id, interaction_info)
                 interaction_count += len(interaction_info)
@@ -255,18 +256,19 @@ def load_all_xml_data(limit: Optional[int] = None):
         if not xml_files:
             continue
 
-        xml_file = xml_files[0]
+        print(f"[{i+1}/{total}] {subdir} ({len(xml_files)}個のXMLファイル)")
 
-        print(f"[{i+1}/{total}] {subdir}")
+        # ディレクトリ内のすべてのXMLファイルを処理
+        for xml_file in xml_files:
+            xml_filename = os.path.basename(xml_file)
+            success, message = process_xml_file(xml_file, conn)
 
-        success, message = process_xml_file(xml_file, conn)
-
-        if success:
-            print(f"  ✓ {message}")
-            success_count += 1
-        else:
-            print(f"  ✗ エラー: {message}")
-            error_count += 1
+            if success:
+                print(f"  ✓ {xml_filename}: {message}")
+                success_count += 1
+            else:
+                print(f"  ✗ {xml_filename}: {message}")
+                error_count += 1
 
     conn.close()
 
@@ -334,7 +336,7 @@ if __name__ == '__main__':
             load_all_xml_data(limit=limit)
         except ValueError:
             print("エラー: 引数は整数で指定してください")
-            print("使用例: python3 src/load_data_v2.py 100")
+            print("使用例: python3 src/load_data.py 100")
     else:
         # 全件処理
         load_all_xml_data(limit=None)
