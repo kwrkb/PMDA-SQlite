@@ -15,7 +15,7 @@ from parse_xml_data_lxml import parse_xml_file
 from parse_product_name import parse_product_name
 
 DB_NAME = 'data/pmda_v2.sqlite'
-XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_20251122/SGML_XML'
+XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 
 def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Optional[int]:
     """

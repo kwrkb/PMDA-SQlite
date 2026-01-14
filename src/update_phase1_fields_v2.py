@@ -21,7 +21,7 @@ from lxml import etree
 import time
 
 DB_NAME = 'pmda_v2.sqlite'
-XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_20251122/SGML_XML'
+XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 
 def update_phase1_fields_v2():
     """既存の医薬品データにフェーズ1フィールドを更新（v2スキーマ版）"""

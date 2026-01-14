@@ -6,7 +6,7 @@ from transform_extracted_data import transform_data
 from glob import glob
 
 DB_NAME = 'pmda.sqlite'
-XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_20251122/SGML_XML'
+XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 JSON_OUTPUT_DIR = 'data/output'
 
 def insert_medicine_data(medicine_data):
