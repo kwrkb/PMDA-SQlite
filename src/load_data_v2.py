@@ -13,9 +13,10 @@ from glob import glob
 from typing import Dict, List, Tuple, Optional
 from parse_xml_data_lxml import parse_xml_file
 from parse_product_name import parse_product_name
+from config import DB_V2, get_xml_source_dir
 
-DB_NAME = 'data/pmda_v2.sqlite'
-XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
+DB_NAME = DB_V2
+XML_SOURCE_DIR = get_xml_source_dir() or 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 
 def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Optional[int]:
     """

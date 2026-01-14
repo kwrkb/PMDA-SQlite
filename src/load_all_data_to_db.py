@@ -4,9 +4,10 @@ import json
 from parse_xml_data_lxml import parse_xml_file_single as parse_xml_file
 from transform_extracted_data import transform_data
 from glob import glob
+from config import DB_LEGACY, get_xml_source_dir
 
-DB_NAME = 'pmda.sqlite'
-XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
+DB_NAME = DB_LEGACY
+XML_SOURCE_DIR = get_xml_source_dir() or 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 JSON_OUTPUT_DIR = 'data/output'
 
 def insert_medicine_data(medicine_data):
