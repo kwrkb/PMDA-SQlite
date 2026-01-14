@@ -39,7 +39,7 @@ def get_xml_source_dir(base_dir: str = PMDA_RAW_DIR) -> Optional[str]:
         print(f"警告: XMLディレクトリが見つかりません: {pattern}")
         return None
 
-    # 日付順にソート（フォルダ名の末尾8文字が日付）
+    # 日付順にソート（アンダースコア区切りの最後の要素＝YYYYMMDD）
     dirs.sort(key=lambda x: x.split('_')[-1], reverse=True)
     latest_dir = dirs[0]
 
