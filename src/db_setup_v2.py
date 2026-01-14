@@ -74,7 +74,8 @@ def setup_database():
         composition TEXT,
 
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (medicine_id) REFERENCES medicines(id) ON DELETE CASCADE
+        FOREIGN KEY (medicine_id) REFERENCES medicines(id) ON DELETE CASCADE,
+        UNIQUE(medicine_id, product_name)  -- 同じ医薬品・製品名の重複を防止
     )
     ''')
 

@@ -6,17 +6,31 @@ lxmlを使用したPMDA XMLパーサー（改善版）
 - 名前空間の扱いが容易
 - 混合コンテンツの処理が堅牢
 - パフォーマンスの向上
+
+v2 改修内容:
+1. 一般名（generic_name）の抽出精度向上
+   - GenericNameタグを確実に取得
+   - 空、空白のみ、"-" などの無効値の場合のみTherapeuticClassificationにフォールバック
+
+2. 複数規格対応
+   - 1つのXMLから複数のDetailBrandNameを抽出
+   - 戻り値: (list[dict], list[dict]) - 複数の製品データと相互作用データ
 """
 
 from lxml import etree
 import os
+from typing import List, Dict, Optional, Any, Tuple
 
 # 名前空間の定義
 NAMESPACES = {
     'p': 'http://info.pmda.go.jp/namespace/prescription_drugs/package_insert/1.0'
 }
 
-def get_text(element, xpath, namespaces=NAMESPACES):
+# 一般名として無効とみなすパターン
+INVALID_GENERIC_NAME_PATTERNS = {'-', '－', '―', '—', ''}
+
+
+def get_text(element, xpath, namespaces=NAMESPACES) -> Optional[str]:
     """
     XPathで要素を取得し、テキストを返します。
 
@@ -44,7 +58,7 @@ def get_text(element, xpath, namespaces=NAMESPACES):
     return None
 
 
-def extract_all_text(element):
+def extract_all_text(element) -> Optional[str]:
     """
     要素からすべてのテキストを再帰的に抽出します（混合コンテンツ対応）。
 
@@ -66,7 +80,7 @@ def extract_all_text(element):
     return ' '.join(texts) if texts else None
 
 
-def extract_structured_text(element):
+def extract_structured_text(element) -> Optional[str]:
     """
     階層構造を保持しながらテキストを抽出します。
 
@@ -124,7 +138,7 @@ def extract_structured_text(element):
     return result.strip() if result else None
 
 
-def process_table(table_element):
+def process_table(table_element) -> str:
     """
     Table要素をMarkdown形式に変換します。
 
@@ -188,198 +202,412 @@ def process_table(table_element):
         return ""
 
 
-def parse_xml_file(xml_path):
+def is_valid_generic_name(name: Optional[str]) -> bool:
     """
-    PMDA XMLファイルを解析して医薬品情報を抽出します（lxml版）。
+    一般名が有効な値かどうかを判定します。
+
+    Args:
+        name: 一般名の候補
+
+    Returns:
+        有効な場合True
+    """
+    if name is None:
+        return False
+    stripped = name.strip()
+    if not stripped:
+        return False
+    if stripped in INVALID_GENERIC_NAME_PATTERNS:
+        return False
+    return True
+
+
+def extract_generic_name(root) -> Optional[str]:
+    """
+    一般名（GenericName）を確実に抽出します。
+
+    抽出優先順位:
+    1. GenericName/Detail/Lang のテキスト
+    2. GenericName 配下のすべてのテキスト
+    3. 上記が無効な場合のみ、TherapeuticClassification にフォールバック
+
+    Args:
+        root: XML root要素
+
+    Returns:
+        一般名の文字列またはNone
+    """
+    # 1. まず GenericName/Detail/Lang から取得を試みる
+    generic_names = root.xpath('.//p:GenericName/p:Detail/p:Lang/text()', namespaces=NAMESPACES)
+    valid_names = [name.strip() for name in generic_names if is_valid_generic_name(name)]
+
+    if valid_names:
+        # 複数ある場合は「/」で結合
+        return '/'.join(valid_names)
+
+    # 2. GenericName 配下の任意の Lang テキストを試す（深い階層対応）
+    generic_names = root.xpath('.//p:GenericName//p:Lang/text()', namespaces=NAMESPACES)
+    valid_names = [name.strip() for name in generic_names if is_valid_generic_name(name)]
+
+    if valid_names:
+        return '/'.join(valid_names)
+
+    # 3. GenericName 要素全体からテキスト抽出
+    generic_elems = root.xpath('.//p:GenericName', namespaces=NAMESPACES)
+    for elem in generic_elems:
+        text = extract_all_text(elem)
+        if is_valid_generic_name(text):
+            return text
+
+    # 4. 最終手段: TherapeuticClassification にフォールバック
+    therapeutic = root.xpath('.//p:TherapeuticClassification//p:Lang/text()', namespaces=NAMESPACES)
+    valid_therapeutic = [t.strip() for t in therapeutic if t and t.strip()]
+    if valid_therapeutic:
+        return valid_therapeutic[0]
+
+    return None
+
+
+def extract_product_specific_data(detail_brand_elem) -> Dict[str, Any]:
+    """
+    DetailBrandName 要素から製品固有の情報を抽出します。
+
+    Args:
+        detail_brand_elem: DetailBrandName 要素
+
+    Returns:
+        製品固有情報の辞書
+    """
+    product_data = {
+        "product_name": None,
+        "yj_code": None,
+        "approval_no": None,
+        "storage": None,
+        "shelf_life": None,
+        "marketing_date": None,
+        "regulatory_classification": None,
+    }
+
+    # 製品名 (ApprovalBrandName)
+    product_name = detail_brand_elem.xpath('.//p:ApprovalBrandName/p:Lang/text()', namespaces=NAMESPACES)
+    if product_name:
+        product_data["product_name"] = product_name[0].strip()
+
+    # YJコード
+    yj_code = detail_brand_elem.xpath('.//p:YJCode/text()', namespaces=NAMESPACES)
+    if yj_code:
+        product_data["yj_code"] = yj_code[0].strip()
+
+    # 承認番号
+    approval_no = detail_brand_elem.xpath('.//p:ApprovalNo/text()', namespaces=NAMESPACES)
+    if approval_no:
+        product_data["approval_no"] = approval_no[0].strip()
+
+    # 保管方法
+    storage = detail_brand_elem.xpath('.//p:StorageMethod/p:Lang/text()', namespaces=NAMESPACES)
+    if storage:
+        product_data["storage"] = storage[0].strip()
+
+    # 有効期間
+    shelf_life = detail_brand_elem.xpath('.//p:ShelfLife/p:Lang/text()', namespaces=NAMESPACES)
+    if shelf_life:
+        product_data["shelf_life"] = shelf_life[0].strip()
+
+    # 販売開始日
+    marketing_date = detail_brand_elem.xpath('.//p:StartingDateOfMarketing/text()', namespaces=NAMESPACES)
+    if marketing_date:
+        product_data["marketing_date"] = marketing_date[0].strip()
+
+    # 規制区分（製品固有）
+    from parse_xml_phase1 import REGULATORY_CODES
+    reg_codes = detail_brand_elem.xpath('.//p:RegulatoryClassificationCode/text()', namespaces=NAMESPACES)
+    classifications = []
+    for code in reg_codes:
+        code = code.strip()
+        if code in REGULATORY_CODES:
+            classification = REGULATORY_CODES[code]
+            if classification not in classifications:
+                classifications.append(classification)
+        elif code:
+            classifications.append(f"コード{code}")
+    if classifications:
+        product_data["regulatory_classification"] = ', '.join(classifications)
+
+    return product_data
+
+
+def extract_common_data(root, xml_path: str) -> Dict[str, Any]:
+    """
+    XML全体から共通情報を抽出します。
+
+    Args:
+        root: XML root要素
+        xml_path: XMLファイルのパス
+
+    Returns:
+        共通情報の辞書
+    """
+    common_data = {
+        "generic_name": None,
+        "manufacturer": None,
+        "revision_date": None,
+        "jsc_code": None,
+        "indications": None,
+        "dosage": None,
+        "contraindications": None,
+        "side_effects": None,
+        "warnings": None,
+        "important_precautions": None,
+        "efficacy_precautions": None,
+        "pregnancy_precautions": None,
+        "pediatric_precautions": None,
+        "elderly_precautions": None,
+        "other_precautions": None,
+        "pharmacokinetics": None,
+        "source_file": os.path.basename(xml_path),
+        # フェーズ1: 追加フィールド（共通）
+        "composition": None,
+        "overdosage": None,
+    }
+
+    # 一般名（改善版ロジック）
+    common_data["generic_name"] = extract_generic_name(root)
+
+    # 日本標準商品分類番号
+    common_data["jsc_code"] = get_text(root, './/p:SccjNo')
+
+    # 改訂年月
+    revision_ym = get_text(root, './/p:PreparationOrRevision[@id="今回"]/p:YearMonth')
+    if revision_ym and '-' in revision_ym:
+        year, month = revision_ym.split('-')
+        common_data["revision_date"] = f"{year}年{month.lstrip('0')}月"
+
+    # 製造販売業者
+    common_data["manufacturer"] = get_text(root, './/p:NameAddressManufact//p:Name/p:Lang')
+
+    # 効能又は効果
+    indications_elem = root.xpath('.//p:IndicationsOrEfficacy', namespaces=NAMESPACES)
+    if indications_elem:
+        common_data["indications"] = extract_structured_text(indications_elem[0])
+
+    # 用法及び用量
+    dosage_elem = root.xpath('.//p:InfoDoseAdmin', namespaces=NAMESPACES)
+    if dosage_elem:
+        common_data["dosage"] = extract_structured_text(dosage_elem[0])
+
+    # 禁忌
+    contraindications_elem = root.xpath('.//p:ContraIndications', namespaces=NAMESPACES)
+    if contraindications_elem:
+        common_data["contraindications"] = extract_structured_text(contraindications_elem[0])
+
+    # 副作用
+    adverse_elem = root.xpath('.//p:AdverseEvents', namespaces=NAMESPACES)
+    if adverse_elem:
+        common_data["side_effects"] = extract_structured_text(adverse_elem[0])
+
+    # 警告
+    warnings_elem = root.xpath('.//p:Warnings', namespaces=NAMESPACES)
+    if warnings_elem:
+        common_data["warnings"] = extract_structured_text(warnings_elem[0])
+
+    # 重要な基本的注意
+    important_prec_elem = root.xpath('.//p:ImportantPrecautions', namespaces=NAMESPACES)
+    if important_prec_elem:
+        common_data["important_precautions"] = extract_structured_text(important_prec_elem[0])
+
+    # 効能関連の注意
+    efficacy_prec_elem = root.xpath('.//p:EfficacyRelatedPrecautions', namespaces=NAMESPACES)
+    if efficacy_prec_elem:
+        common_data["efficacy_precautions"] = extract_structured_text(efficacy_prec_elem[0])
+
+    # 妊婦・授乳婦への注意
+    pregnancy_elem = root.xpath('.//p:PrecautionsForPregnancyLactation', namespaces=NAMESPACES)
+    if pregnancy_elem:
+        common_data["pregnancy_precautions"] = extract_structured_text(pregnancy_elem[0])
+
+    # 小児等への投与
+    pediatric_elem = root.xpath('.//p:PediatricUse', namespaces=NAMESPACES)
+    if pediatric_elem:
+        common_data["pediatric_precautions"] = extract_structured_text(pediatric_elem[0])
+
+    # 高齢者への投与
+    elderly_elem = root.xpath('.//p:PrecautionsForElderlyUse', namespaces=NAMESPACES)
+    if elderly_elem:
+        common_data["elderly_precautions"] = extract_structured_text(elderly_elem[0])
+
+    # その他の注意
+    other_prec_elem = root.xpath('.//p:OtherPrecautions', namespaces=NAMESPACES)
+    if other_prec_elem:
+        common_data["other_precautions"] = extract_structured_text(other_prec_elem[0])
+
+    # 薬物動態
+    pharmacokinetics_elem = root.xpath('.//p:Pharmacokinetics', namespaces=NAMESPACES)
+    if pharmacokinetics_elem:
+        common_data["pharmacokinetics"] = extract_structured_text(pharmacokinetics_elem[0])
+
+    # フェーズ1: 追加フィールドの抽出
+    from parse_xml_phase1 import (
+        extract_composition,
+        extract_overdosage
+    )
+
+    common_data["composition"] = extract_composition(root)
+    common_data["overdosage"] = extract_overdosage(root)
+
+    return common_data
+
+
+def extract_interactions(root) -> List[Dict[str, str]]:
+    """
+    相互作用情報を抽出します。
+
+    Args:
+        root: XML root要素
+
+    Returns:
+        相互作用情報のリスト
+    """
+    interactions_data = []
+
+    # 併用禁忌
+    contraindicated = root.xpath('.//p:ContraIndicatedCombination', namespaces=NAMESPACES)
+    for combo in contraindicated:
+        drug_names = combo.xpath('.//p:DrugName//p:Lang/text()', namespaces=NAMESPACES)
+        if drug_names:
+            drug_name = drug_names[0]
+
+            # 詳細情報を取得
+            details = []
+            for detail_type in ['p:ClinicalSymptom', 'p:Mechanism', 'p:TreatmentMethod']:
+                detail_texts = combo.xpath(f'.//{detail_type}//p:Lang/text()', namespaces=NAMESPACES)
+                details.extend(detail_texts)
+
+            description = ' '.join(details) if details else '併用禁忌'
+            interactions_data.append({
+                'target_name': drug_name.strip(),
+                'description': description,
+                'severity': 'contraindication'
+            })
+
+    # 併用注意
+    precautions = root.xpath('.//p:PrecautionsForCombination', namespaces=NAMESPACES)
+    for combo in precautions:
+        drug_names = combo.xpath('.//p:DrugName//p:Lang/text()', namespaces=NAMESPACES)
+        if drug_names:
+            drug_name = drug_names[0]
+
+            # 詳細情報を取得
+            details = []
+            for detail_type in ['p:ClinicalSymptom', 'p:Mechanism', 'p:TreatmentMethod']:
+                detail_texts = combo.xpath(f'.//{detail_type}//p:Lang/text()', namespaces=NAMESPACES)
+                details.extend(detail_texts)
+
+            description = ' '.join(details) if details else '併用注意'
+            interactions_data.append({
+                'target_name': drug_name.strip(),
+                'description': description,
+                'severity': 'precaution'
+            })
+
+    return interactions_data
+
+
+def parse_xml_file(xml_path: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
+    """
+    PMDA XMLファイルを解析して医薬品情報を抽出します（lxml版、複数規格対応）。
+
+    1つのXMLファイルから複数の製品データを抽出します。
+    共通情報（一般名、効能、禁忌など）はすべての製品データに複製されます。
 
     Args:
         xml_path: XMLファイルのパス
 
     Returns:
-        (medicine_data, interactions_data) のタプル
+        (medicines_data, interactions_data) のタプル
+        - medicines_data: 製品データ辞書のリスト（各DetailBrandNameに対応）
+        - interactions_data: 相互作用データ辞書のリスト（全製品で共通）
+
+        エラー時は ([], []) を返す
     """
     try:
         # XMLをパース
         tree = etree.parse(xml_path)
         root = tree.getroot()
 
-        # 医薬品情報の初期化
-        medicine_data = {
-            "product_name": None,
-            "generic_name": None,
-            "manufacturer": None,
-            "revision_date": None,
-            "jsc_code": None,
-            "indications": None,
-            "dosage": None,
-            "contraindications": None,
-            "side_effects": None,
-            "warnings": None,
-            "important_precautions": None,
-            "efficacy_precautions": None,
-            "pregnancy_precautions": None,
-            "pediatric_precautions": None,
-            "elderly_precautions": None,
-            "other_precautions": None,
-            "pharmacokinetics": None,
-            "storage": None,
-            "source_file": os.path.basename(xml_path),
-            # フェーズ1: 追加フィールド
-            "regulatory_classification": None,
-            "composition": None,
-            "overdosage": None,
-        }
+        # 共通情報を抽出
+        common_data = extract_common_data(root, xml_path)
 
-        interactions_data = []
+        # 相互作用を抽出（共通）
+        interactions_data = extract_interactions(root)
 
-        # XPathで情報を抽出
+        # 製品固有情報を抽出
+        detail_brand_elems = root.xpath('.//p:DetailBrandName', namespaces=NAMESPACES)
 
-        # 製品名
-        medicine_data["product_name"] = get_text(root, './/p:ApprovalBrandName/p:Lang')
+        medicines_data = []
 
-        # 一般名（配合薬の場合は複数あり）
-        generic_names = root.xpath('.//p:GenericName//p:Lang/text()', namespaces=NAMESPACES)
-        if generic_names:
-            # 複数ある場合は「/」で結合
-            medicine_data["generic_name"] = '/'.join(name.strip() for name in generic_names if name.strip())
+        if detail_brand_elems:
+            # 複数のDetailBrandNameがある場合
+            for detail_elem in detail_brand_elems:
+                product_data = extract_product_specific_data(detail_elem)
+
+                # 製品名が取得できた場合のみ追加
+                if product_data.get("product_name"):
+                    # 共通データと製品固有データをマージ
+                    medicine_entry = common_data.copy()
+                    medicine_entry.update(product_data)
+                    medicines_data.append(medicine_entry)
         else:
-            # 薬効分類名を代替として使用
-            medicine_data["generic_name"] = get_text(root, './/p:TherapeuticClassification//p:Lang')
+            # DetailBrandNameが存在しない場合（旧形式のXML）
+            # 従来の方法で製品名を取得
+            product_name = get_text(root, './/p:ApprovalBrandName/p:Lang')
 
-        # 日本標準商品分類番号
-        medicine_data["jsc_code"] = get_text(root, './/p:SccjNo')
+            # 規制区分を全体から取得
+            from parse_xml_phase1 import extract_regulatory_classification
+            regulatory = extract_regulatory_classification(root)
 
-        # 改訂年月
-        revision_ym = get_text(root, './/p:PreparationOrRevision[@id="今回"]/p:YearMonth')
-        if revision_ym and '-' in revision_ym:
-            year, month = revision_ym.split('-')
-            medicine_data["revision_date"] = f"{year}年{month.lstrip('0')}月"
+            # 保管方法を全体から取得
+            storage = None
+            storage_elem = root.xpath('.//p:Storage | .//p:StorageMethod', namespaces=NAMESPACES)
+            if storage_elem:
+                storage = extract_structured_text(storage_elem[0])
 
-        # 製造販売業者
-        medicine_data["manufacturer"] = get_text(root, './/p:NameAddressManufact//p:Name/p:Lang')
+            medicine_entry = common_data.copy()
+            medicine_entry.update({
+                "product_name": product_name,
+                "regulatory_classification": regulatory,
+                "storage": storage,
+                "yj_code": None,
+                "approval_no": None,
+                "shelf_life": None,
+                "marketing_date": None,
+            })
+            medicines_data.append(medicine_entry)
 
-        # 効能又は効果
-        indications_elem = root.xpath('.//p:IndicationsOrEfficacy', namespaces=NAMESPACES)
-        if indications_elem:
-            medicine_data["indications"] = extract_structured_text(indications_elem[0])
-
-        # 用法及び用量
-        dosage_elem = root.xpath('.//p:InfoDoseAdmin', namespaces=NAMESPACES)
-        if dosage_elem:
-            medicine_data["dosage"] = extract_structured_text(dosage_elem[0])
-
-        # 禁忌
-        contraindications_elem = root.xpath('.//p:ContraIndications', namespaces=NAMESPACES)
-        if contraindications_elem:
-            medicine_data["contraindications"] = extract_structured_text(contraindications_elem[0])
-
-        # 副作用
-        adverse_elem = root.xpath('.//p:AdverseEvents', namespaces=NAMESPACES)
-        if adverse_elem:
-            medicine_data["side_effects"] = extract_structured_text(adverse_elem[0])
-
-        # 警告
-        warnings_elem = root.xpath('.//p:Warnings', namespaces=NAMESPACES)
-        if warnings_elem:
-            medicine_data["warnings"] = extract_structured_text(warnings_elem[0])
-
-        # 重要な基本的注意
-        important_prec_elem = root.xpath('.//p:ImportantPrecautions', namespaces=NAMESPACES)
-        if important_prec_elem:
-            medicine_data["important_precautions"] = extract_structured_text(important_prec_elem[0])
-
-        # 効能関連の注意
-        efficacy_prec_elem = root.xpath('.//p:EfficacyRelatedPrecautions', namespaces=NAMESPACES)
-        if efficacy_prec_elem:
-            medicine_data["efficacy_precautions"] = extract_structured_text(efficacy_prec_elem[0])
-
-        # 妊婦・授乳婦への注意
-        pregnancy_elem = root.xpath('.//p:PrecautionsForPregnancyLactation', namespaces=NAMESPACES)
-        if pregnancy_elem:
-            medicine_data["pregnancy_precautions"] = extract_structured_text(pregnancy_elem[0])
-
-        # 小児等への投与
-        pediatric_elem = root.xpath('.//p:PediatricUse', namespaces=NAMESPACES)
-        if pediatric_elem:
-            medicine_data["pediatric_precautions"] = extract_structured_text(pediatric_elem[0])
-
-        # 高齢者への投与
-        elderly_elem = root.xpath('.//p:PrecautionsForElderlyUse', namespaces=NAMESPACES)
-        if elderly_elem:
-            medicine_data["elderly_precautions"] = extract_structured_text(elderly_elem[0])
-
-        # その他の注意
-        other_prec_elem = root.xpath('.//p:OtherPrecautions', namespaces=NAMESPACES)
-        if other_prec_elem:
-            medicine_data["other_precautions"] = extract_structured_text(other_prec_elem[0])
-
-        # 薬物動態
-        pharmacokinetics_elem = root.xpath('.//p:Pharmacokinetics', namespaces=NAMESPACES)
-        if pharmacokinetics_elem:
-            medicine_data["pharmacokinetics"] = extract_structured_text(pharmacokinetics_elem[0])
-
-        # 保管方法
-        storage_elem = root.xpath('.//p:Storage | .//p:StorageMethod', namespaces=NAMESPACES)
-        if storage_elem:
-            medicine_data["storage"] = extract_structured_text(storage_elem[0])
-
-        # 相互作用
-        # 併用禁忌
-        contraindicated = root.xpath('.//p:ContraIndicatedCombination', namespaces=NAMESPACES)
-        for combo in contraindicated:
-            drug_names = combo.xpath('.//p:DrugName//p:Lang/text()', namespaces=NAMESPACES)
-            if drug_names:
-                drug_name = drug_names[0]
-
-                # 詳細情報を取得
-                details = []
-                for detail_type in ['p:ClinicalSymptom', 'p:Mechanism', 'p:TreatmentMethod']:
-                    detail_texts = combo.xpath(f'.//{detail_type}//p:Lang/text()', namespaces=NAMESPACES)
-                    details.extend(detail_texts)
-
-                description = ' '.join(details) if details else '併用禁忌'
-                interactions_data.append({
-                    'target_name': drug_name.strip(),
-                    'description': description
-                })
-
-        # 併用注意
-        precautions = root.xpath('.//p:PrecautionsForCombination', namespaces=NAMESPACES)
-        for combo in precautions:
-            drug_names = combo.xpath('.//p:DrugName//p:Lang/text()', namespaces=NAMESPACES)
-            if drug_names:
-                drug_name = drug_names[0]
-
-                # 詳細情報を取得
-                details = []
-                for detail_type in ['p:ClinicalSymptom', 'p:Mechanism', 'p:TreatmentMethod']:
-                    detail_texts = combo.xpath(f'.//{detail_type}//p:Lang/text()', namespaces=NAMESPACES)
-                    details.extend(detail_texts)
-
-                description = ' '.join(details) if details else '併用注意'
-                interactions_data.append({
-                    'target_name': drug_name.strip(),
-                    'description': description
-                })
-
-        # フェーズ1: 追加フィールドの抽出
-        from parse_xml_phase1 import (
-            extract_regulatory_classification,
-            extract_composition,
-            extract_overdosage
-        )
-
-        medicine_data["regulatory_classification"] = extract_regulatory_classification(root)
-        medicine_data["composition"] = extract_composition(root)
-        medicine_data["overdosage"] = extract_overdosage(root)
-
-        return medicine_data, interactions_data
+        return medicines_data, interactions_data
 
     except Exception as e:
         import traceback
         print(f"XMLパース中にエラー: {xml_path} - {e}")
         traceback.print_exc()
-        return None, None
+        return [], []
+
+
+# 後方互換性のためのラッパー関数
+def parse_xml_file_single(xml_path: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, str]]]:
+    """
+    後方互換性のためのラッパー。最初の製品データのみを返します。
+
+    Args:
+        xml_path: XMLファイルのパス
+
+    Returns:
+        (medicine_data, interactions_data) のタプル
+        - medicine_data: 最初の製品データ辞書（なければNone）
+        - interactions_data: 相互作用データ辞書のリスト
+    """
+    medicines, interactions = parse_xml_file(xml_path)
+    medicine = medicines[0] if medicines else None
+    return medicine, interactions
 
 
 if __name__ == '__main__':
@@ -389,26 +617,38 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         xml_file = sys.argv[1]
     else:
-        # デフォルトのテストファイル
-        xml_file = 'data/PMDAraw/pmda_all_20251122/SGML_XML/「ビケンＨＡ」/630144_631340FA1047_1_36.xml'
+        # デフォルトのテストファイル（複数規格を持つもの）
+        xml_file = 'data/PMDAraw/pmda_all_20251122/SGML_XML/ミッドペリックＬ４００腹膜透析液/470034_3420429A1044_1_05.xml'
 
     if os.path.exists(xml_file):
         print(f"パース中: {xml_file}\n")
-        medicine_info, interaction_info = parse_xml_file(xml_file)
+        medicines_info, interaction_info = parse_xml_file(xml_file)
 
-        if medicine_info:
-            print("=== 抽出された医薬品情報 ===")
-            for key, value in medicine_info.items():
-                if value:
-                    display_value = value[:100] + "..." if len(str(value)) > 100 else value
-                    print(f"{key}: {display_value}")
+        print(f"=== 抽出された製品数: {len(medicines_info)} ===\n")
 
-            print(f"\n=== 抽出された相互作用情報 ===")
-            print(f"相互作用件数: {len(interaction_info)}")
-            for i, interaction in enumerate(interaction_info[:3]):
-                print(f"\n{i+1}. {interaction['target_name']}")
-                desc = interaction['description']
-                print(f"   {desc[:150]}..." if len(desc) > 150 else f"   {desc}")
+        for i, medicine_info in enumerate(medicines_info[:5]):  # 最大5件表示
+            print(f"\n--- 製品 {i+1} ---")
+            print(f"製品名: {medicine_info.get('product_name')}")
+            print(f"一般名: {medicine_info.get('generic_name')}")
+            print(f"YJコード: {medicine_info.get('yj_code')}")
+            print(f"承認番号: {medicine_info.get('approval_no')}")
+            print(f"規制区分: {medicine_info.get('regulatory_classification')}")
+            print(f"保管方法: {medicine_info.get('storage')}")
+
+        if len(medicines_info) > 5:
+            print(f"\n... 他 {len(medicines_info) - 5} 件")
+
+        print(f"\n=== 抽出された相互作用情報 ===")
+        print(f"相互作用件数: {len(interaction_info)}")
+        for i, interaction in enumerate(interaction_info[:3]):
+            print(f"\n{i+1}. {interaction['target_name']} ({interaction.get('severity', 'N/A')})")
+            desc = interaction['description']
+            print(f"   {desc[:150]}..." if len(desc) > 150 else f"   {desc}")
+
+        # 一般名抽出のテスト
+        print("\n=== 一般名抽出テスト ===")
+        if medicines_info:
+            print(f"抽出された一般名: {medicines_info[0].get('generic_name')}")
     else:
         print(f"ファイルが見つかりません: {xml_file}")
         print("\n使用方法:")
