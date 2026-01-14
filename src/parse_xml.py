@@ -29,6 +29,17 @@ NAMESPACES = {
 # 一般名として無効とみなすパターン
 INVALID_GENERIC_NAME_PATTERNS = {'-', '－', '―', '—', ''}
 
+# 規制区分コードのマッピング（PMDA標準コード）
+REGULATORY_CODES = {
+    '1': '毒薬',
+    '2': '劇薬',
+    '11': '生物由来製品',
+    '12': '特定生物由来製品',
+    '13': '処方箋医薬品',
+    '14': '要指示医薬品',
+    '15': '要指示医薬品注意',
+}
+
 
 def get_text(element, xpath, namespaces=NAMESPACES) -> Optional[str]:
     """
@@ -268,6 +279,125 @@ def extract_generic_name(root) -> Optional[str]:
     return None
 
 
+def extract_regulatory_classification(root) -> Optional[str]:
+    """
+    規制区分を抽出します。
+
+    PMDA XMLの <RegulatoryClassification> 要素から
+    <RegulatoryClassificationCode> を読み取り、
+    コード番号を日本語名にマッピングします。
+
+    Args:
+        root: XML root要素
+
+    Returns:
+        規制区分の文字列（カンマ区切り）
+    """
+    classifications = []
+
+    # RegulatoryClassificationCodeを全て取得
+    codes = root.xpath('.//p:RegulatoryClassificationCode/text()',
+                       namespaces=NAMESPACES)
+
+    for code in codes:
+        code = code.strip()
+        if code in REGULATORY_CODES:
+            classification = REGULATORY_CODES[code]
+            if classification not in classifications:
+                classifications.append(classification)
+        else:
+            classifications.append(f"コード{code}")
+
+    return ', '.join(classifications) if classifications else None
+
+
+def extract_composition(root) -> Optional[str]:
+    """
+    組成・性状を抽出します。
+
+    PMDA XMLの <Composition> および <CompositionAndProperty> セクションから
+    成分、添加物、剤形などの情報を抽出します。
+
+    Args:
+        root: XML root要素
+
+    Returns:
+        組成・性状の文字列
+    """
+    compositions = []
+
+    # 1. 処方の概要（OverviewOfRecipe）
+    overview_elems = root.xpath('.//p:OverviewOfRecipe', namespaces=NAMESPACES)
+    for elem in overview_elems:
+        text = extract_all_text(elem)
+        if text:
+            compositions.append(f"【処方の概要】\n{text}")
+
+    # 2. 組成（Composition）
+    comp_elems = root.xpath('.//p:Composition', namespaces=NAMESPACES)
+    for elem in comp_elems:
+        overview = elem.xpath('.//p:OverviewOfComposition', namespaces=NAMESPACES)
+        if overview:
+            overview_text = extract_all_text(overview[0])
+            if overview_text:
+                compositions.append(f"\n【組成】\n{overview_text}")
+
+        ingredients = elem.xpath('.//p:ActiveIngredientName//p:Lang/text()',
+                                namespaces=NAMESPACES)
+        if ingredients:
+            ing_list = "\n- ".join([ing.strip() for ing in ingredients if ing.strip()])
+            if ing_list:
+                compositions.append(f"\n有効成分:\n- {ing_list}")
+
+        additives = elem.xpath('.//p:IndividualAdditive//p:Lang/text()',
+                              namespaces=NAMESPACES)
+        if additives:
+            add_list = "\n- ".join([add.strip() for add in additives if add.strip()])
+            if add_list:
+                compositions.append(f"\n添加物:\n- {add_list}")
+
+    # 3. 性状（Property）
+    property_elems = root.xpath('.//p:Property', namespaces=NAMESPACES)
+    for elem in property_elems:
+        text = extract_structured_text(elem)
+        if text:
+            compositions.append(f"\n【性状】\n{text}")
+
+    return '\n'.join(compositions) if compositions else None
+
+
+def extract_overdosage(root) -> Optional[str]:
+    """
+    過量投与情報を抽出します。
+
+    PMDA XMLの <Overdosage> セクションから
+    過量投与時の症状と処置方法を抽出します。
+
+    Args:
+        root: XML root要素
+
+    Returns:
+        過量投与情報の文字列
+    """
+    overdosage_elems = root.xpath('.//p:Overdosage', namespaces=NAMESPACES)
+
+    if not overdosage_elems:
+        return None
+
+    overdosage_texts = []
+
+    for elem in overdosage_elems:
+        caption = elem.xpath('.//p:Caption//p:Lang/text()', namespaces=NAMESPACES)
+        if caption:
+            overdosage_texts.append(f"**{caption[0].strip()}**")
+
+        text = extract_structured_text(elem)
+        if text:
+            overdosage_texts.append(text)
+
+    return '\n\n'.join(overdosage_texts) if overdosage_texts else None
+
+
 def extract_product_specific_data(detail_brand_elem) -> Dict[str, Any]:
     """
     DetailBrandName 要素から製品固有の情報を抽出します。
@@ -319,7 +449,6 @@ def extract_product_specific_data(detail_brand_elem) -> Dict[str, Any]:
         product_data["marketing_date"] = marketing_date[0].strip()
 
     # 規制区分（製品固有）
-    from parse_xml_phase1 import REGULATORY_CODES
     reg_codes = detail_brand_elem.xpath('.//p:RegulatoryClassificationCode/text()', namespaces=NAMESPACES)
     classifications = []
     for code in reg_codes:
@@ -446,11 +575,6 @@ def extract_common_data(root, xml_path: str) -> Dict[str, Any]:
         common_data["pharmacokinetics"] = extract_structured_text(pharmacokinetics_elem[0])
 
     # フェーズ1: 追加フィールドの抽出
-    from parse_xml_phase1 import (
-        extract_composition,
-        extract_overdosage
-    )
-
     common_data["composition"] = extract_composition(root)
     common_data["overdosage"] = extract_overdosage(root)
 
@@ -562,7 +686,6 @@ def parse_xml_file(xml_path: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, 
             product_name = get_text(root, './/p:ApprovalBrandName/p:Lang')
 
             # 規制区分を全体から取得
-            from parse_xml_phase1 import extract_regulatory_classification
             regulatory = extract_regulatory_classification(root)
 
             # 保管方法を全体から取得

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-フェーズ1フィールドの更新スクリプト
+フェーズ1フィールドの更新スクリプト（v2スキーマ用）
 
 既存のmedicinesテーブルのレコードに対して、
 XMLファイルから以下のフィールドを抽出して更新:
@@ -12,7 +12,7 @@ XMLファイルから以下のフィールドを抽出して更新:
 import sqlite3
 import os
 from glob import glob
-from parse_xml_phase1 import (
+from parse_xml import (
     extract_regulatory_classification,
     extract_composition,
     extract_overdosage
@@ -20,20 +20,21 @@ from parse_xml_phase1 import (
 from lxml import etree
 import time
 
-DB_NAME = 'pmda.sqlite'
+DB_NAME = 'pmda_v2.sqlite'
 XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 
-def update_phase1_fields():
-    """既存の医薬品データにフェーズ1フィールドを更新"""
+def update_phase1_fields_v2():
+    """既存の医薬品データにフェーズ1フィールドを更新（v2スキーマ版）"""
 
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
 
-    # XMLソースファイルを持つすべての医薬品を取得
+    # 各medicineに対して、対応するspecificationからsource_fileを取得
     cur.execute("""
-        SELECT id, source_file
-        FROM medicines
-        WHERE source_file LIKE '%.xml'
+        SELECT DISTINCT m.id, s.source_file
+        FROM medicines m
+        JOIN specifications s ON m.id = s.medicine_id
+        WHERE s.source_file LIKE '%.xml'
     """)
 
     medicines = cur.fetchall()
@@ -144,7 +145,7 @@ def update_phase1_fields():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("フェーズ1フィールド更新スクリプト")
+    print("フェーズ1フィールド更新スクリプト (v2スキーマ)")
     print("=" * 60)
     print()
 
@@ -158,4 +159,4 @@ if __name__ == '__main__':
         print(f"エラー: XMLディレクトリ '{XML_SOURCE_DIR}' が見つかりません。")
         exit(1)
 
-    update_phase1_fields()
+    update_phase1_fields_v2()

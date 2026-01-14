@@ -9,8 +9,7 @@ from glob import glob
 from typing import Optional
 
 # データベースファイルパス
-DB_LEGACY = 'pmda.sqlite'
-DB_V2 = 'data/pmda_v2.sqlite'
+DB_PATH = 'data/pmda.sqlite'
 
 # PMDAデータの基本ディレクトリ
 PMDA_RAW_DIR = 'data/PMDAraw'
@@ -73,6 +72,7 @@ if __name__ == '__main__':
     # テスト
     print("=== PMDA-SQLite 設定確認 ===\n")
 
+    print(f"データベース: {DB_PATH}")
     print(f"PMDAデータディレクトリ: {PMDA_RAW_DIR}")
     print(f"検索パターン: {XML_DIR_PATTERN}\n")
 
