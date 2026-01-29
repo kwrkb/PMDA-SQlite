@@ -14,6 +14,7 @@ from typing import Dict, List, Tuple, Optional
 from parse_xml import parse_xml_file
 from parse_product_name import parse_product_name
 from config import DB_PATH, get_xml_source_dir
+from db_setup import rebuild_fts_index
 
 DB_NAME = DB_PATH
 XML_SOURCE_DIR = get_xml_source_dir() or 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
@@ -279,6 +280,9 @@ def load_all_xml_data(limit: Optional[int] = None):
     print(f"成功: {success_count}件")
     print(f"失敗: {error_count}件")
     print(f"合計: {success_count + error_count}件")
+
+    # FTS5インデックスを再構築
+    rebuild_fts_index()
 
     # データベース統計を表示
     print_database_stats()

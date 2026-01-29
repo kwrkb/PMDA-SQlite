@@ -106,15 +106,16 @@ def setup_database():
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_interactions_severity ON interactions(severity)')
 
     # 全文検索用仮想テーブル (FTS5) - オプション
-    # SQLiteのバージョンによってはFTS5が使えない場合があるのでtry-except
+    # medicines と specifications を結合した検索用インデックス
+    # 注意: contentless FTS5テーブル。データは rebuild_fts_index() で手動投入
     try:
         cursor.execute('''
         CREATE VIRTUAL TABLE IF NOT EXISTS medicines_fts USING fts5(
             product_name,
             generic_name,
             indications,
-            content='specifications', 
-            content_rowid='id'
+            spec_id UNINDEXED,
+            medicine_id UNINDEXED
         )
         ''')
         print("FTS5 table created successfully.")
@@ -124,6 +125,47 @@ def setup_database():
     conn.commit()
     conn.close()
     print("Database setup completed successfully.")
+
+
+def rebuild_fts_index():
+    """
+    FTS5インデックスを再構築します。
+
+    medicines と specifications テーブルを結合し、
+    全文検索用のインデックスを作成します。
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    print("Rebuilding FTS5 index...")
+
+    try:
+        # 既存データを削除
+        cursor.execute('DELETE FROM medicines_fts')
+
+        # medicines と specifications を結合してFTS5に挿入
+        cursor.execute('''
+            INSERT INTO medicines_fts (product_name, generic_name, indications, spec_id, medicine_id)
+            SELECT
+                s.product_name,
+                m.generic_name,
+                m.indications,
+                s.id,
+                m.id
+            FROM specifications s
+            JOIN medicines m ON s.medicine_id = m.id
+        ''')
+
+        inserted = cursor.rowcount
+        conn.commit()
+        print(f"FTS5 index rebuilt: {inserted:,} entries")
+
+    except Exception as e:
+        print(f"FTS5 rebuild failed: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
 
 if __name__ == "__main__":
     setup_database()

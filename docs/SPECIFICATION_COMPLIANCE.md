@@ -63,7 +63,7 @@
 
 ### 2.1 パーサー実装
 
-#### ファイル: `src/parse_xml_data_lxml.py`
+#### ファイル: `src/parse_xml.py`
 
 **長所**:
 - ✅ lxmlを使用（仕様のドキュメント中心型XMLに適合）
@@ -101,24 +101,16 @@ medicine_data = {
 
 ### 2.2 データベーススキーマ
 
-#### レガシースキーマ (`pmda.sqlite`)
+#### 現行スキーマ (`pmda.sqlite`)
 
-**テーブル**:
-1. `medicines` - 医薬品情報（フラット構造、21列）
-2. `interactions` - 薬物相互作用
-
-**課題**:
-- 製品バリエーション（10mg錠、50mg錠など）が別レコードとして重複
-- 規格情報（剤形、含量）が文字列に埋め込まれ、構造化検索が困難
-
-#### 改善スキーマ (`pmda_v2.sqlite`)
+正規化された3テーブル構成に統一済み。
 
 **テーブル**:
 1. `medicines` - 医薬品情報（成分単位）
 2. `specifications` - 規格情報（剤形・含量単位）
 3. `interactions` - 薬物相互作用
 
-**改善点**:
+**設計の特徴**:
 - ✅ 規格分離による情報重複削減
 - ✅ 剤形・含量による構造化検索
 - ✅ 1つの有効成分に複数の規格を関連付け
@@ -478,7 +470,7 @@ INSERT INTO schema_version VALUES
 **目標**: フェーズ1の実装（重要フィールド追加）
 
 **タスク**:
-1. ✅ `parse_xml_data_lxml.py`に組成・性状抽出コードを追加
+1. ✅ `parse_xml.py`に組成・性状抽出コードを追加
 2. ✅ 規制区分、過量投与の抽出コードを追加
 3. ✅ データベースマイグレーションスクリプト作成
 4. ✅ 既存データベースへのカラム追加
@@ -486,7 +478,7 @@ INSERT INTO schema_version VALUES
 6. ✅ テストケース作成（サンプルXMLで検証）
 
 **成果物**:
-- `src/parse_xml_data_lxml.py` (v1.1)
+- `src/parse_xml.py` (v1.1)
 - `migrations/add_phase1_fields.sql`
 - `tests/test_phase1_extraction.py`
 
@@ -501,7 +493,7 @@ INSERT INTO schema_version VALUES
 4. ✅ サンプルクエリとドキュメント作成
 
 **成果物**:
-- `src/parse_xml_data_lxml.py` (v1.2)
+- `src/parse_xml.py` (v1.2)
 - `migrations/add_metadata_tables.sql`
 - `examples/metadata_queries.py`
 
@@ -516,7 +508,7 @@ INSERT INTO schema_version VALUES
 4. ✅ 完全版ドキュメント作成
 
 **成果物**:
-- `src/parse_xml_data_lxml.py` (v2.0)
+- `src/parse_xml.py` (v2.0)
 - `docs/COMPLETE_SCHEMA.md`
 - `examples/advanced_queries.py`
 
@@ -568,7 +560,6 @@ FROM medicines;
 
 | ファイル | 更新内容 |
 |---------|---------|
-| `docs/DATABASE_SCHEMA.md` | 新フィールドの説明を追加 |
 | `docs/XML_NAMESPACE.md` | 新要素のXPathパターンを追加 |
 | `README.md` | フェーズごとの機能を更新 |
 
@@ -638,7 +629,6 @@ FROM medicines;
 
 ### 10.3 プロジェクト内ドキュメント
 
-- `docs/DATABASE_SCHEMA.md` - 現行スキーマ詳細
 - `docs/IMPROVED_SCHEMA.md` - v2スキーマ設計
 - `docs/XML_NAMESPACE.md` - 名前空間ガイド
 - `CLAUDE.md` - プロジェクト概要

@@ -8,6 +8,7 @@
 
 ```
 src/
+├── check_db_integrity.py  # DB整合性チェック
 ├── config.py              # 共通設定（DBパス、XMLディレクトリ自動検出）
 ├── db_setup.py            # データベーススキーマ作成
 ├── load_data.py           # XMLデータのロード
