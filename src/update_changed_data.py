@@ -10,12 +10,13 @@ import sqlite3
 import os
 from glob import glob
 from typing import Dict, Set
-from parse_xml_data_lxml import parse_xml_file_single as parse_xml_file
-from parse_product_name import parse_product_name
+from parse_xml import parse_xml_file
+from load_data import process_xml_file
 import time
+from config import DB_PATH, get_xml_source_dir
 
-DB_NAME = 'pmda_v2.sqlite'
-XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
+DB_NAME = DB_PATH
+XML_SOURCE_DIR = get_xml_source_dir() or 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 
 
 def get_existing_revisions(conn: sqlite3.Connection) -> Dict[str, str]:
@@ -26,7 +27,7 @@ def get_existing_revisions(conn: sqlite3.Connection) -> Dict[str, str]:
         {source_file: revision_date} の辞書
     """
     cur = conn.cursor()
-    cur.execute("SELECT source_file, revision_date FROM specifications")
+    cur.execute("SELECT source_file, revision_date FROM medicines")
 
     revisions = {}
     for source_file, revision_date in cur.fetchall():
@@ -100,8 +101,8 @@ def update_changed_data():
     if not os.path.exists(DB_NAME):
         print(f"エラー: データベース '{DB_NAME}' が見つかりません。")
         print("先にデータベースを作成してください:")
-        print("  python3 src/db_setup_v2.py")
-        print("  python3 src/load_data_v2.py")
+        print("  python3 src/db_setup.py")
+        print("  python3 src/load_data.py")
         return
 
     if not os.path.exists(XML_SOURCE_DIR):
@@ -136,27 +137,29 @@ def update_changed_data():
         source_file = os.path.basename(xml_path)
 
         try:
-            # 既存データを削除
+            # 既存データを削除（medicines → specifications, interactions はCASCADE）
             cur = conn.cursor()
-            cur.execute("""
-                DELETE FROM specifications
-                WHERE source_file = ?
-            """, (source_file,))
 
-            # 医薬品データも削除（orphanになるため）
-            # TODO: より洗練された方法を実装
+            # source_fileから既存のmedicine_idを取得
+            cur.execute("SELECT id FROM medicines WHERE source_file = ?", (source_file,))
+            existing = cur.fetchone()
 
-            # 新しいデータをロード
-            # （load_data_v2.pyのロジックを再利用）
-            medicine_data, interactions_data = parse_xml_file(xml_path)
+            if existing:
+                medicine_id = existing[0]
+                # 関連する specifications と interactions を削除
+                cur.execute("DELETE FROM interactions WHERE medicine_id = ?", (medicine_id,))
+                cur.execute("DELETE FROM specifications WHERE medicine_id = ?", (medicine_id,))
+                cur.execute("DELETE FROM medicines WHERE id = ?", (medicine_id,))
 
-            if not medicine_data:
+            # 新しいデータをロード（load_data.pyのロジックを再利用）
+            success, message = process_xml_file(xml_path, conn)
+
+            if not success:
+                print(f"  ✗ {source_file}: {message}")
                 error_count += 1
                 continue
 
-            # 簡略化のため、詳細な実装は省略
-            # 実際には load_data_v2.py の process_xml_file() を呼び出すべき
-
+            print(f"  ✓ {source_file}: {message}")
             updated_count += 1
 
             if updated_count % 10 == 0:
@@ -192,12 +195,12 @@ if __name__ == '__main__':
     print("=" * 60)
     print()
     print("⚠️  注意: このスクリプトは開発中です")
-    print("完全な実装には load_data_v2.py のロジック統合が必要です")
+    print("完全な実装には load_data.py のロジック統合が必要です")
     print()
 
     # TODO: 完全な実装
     # update_changed_data()
 
     print("現時点では、完全再構築を推奨します:")
-    print("  python3 src/db_setup_v2.py")
-    print("  python3 src/load_data_v2.py")
+    print("  python3 src/db_setup.py")
+    print("  python3 src/load_data.py")

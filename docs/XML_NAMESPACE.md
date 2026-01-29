@@ -261,7 +261,6 @@ text = root.xpath('.//p:Lang[@xml:lang="ja"]/text()',
 
 - PMDA公式サイト: https://www.pmda.go.jp/
 - XML仕様書: （PDFの詳細を参照）
-- プロジェクトドキュメント: `docs/DATABASE_SCHEMA.md`
 
 ---
 

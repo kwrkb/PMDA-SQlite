@@ -19,9 +19,10 @@ from parse_xml import (
 )
 from lxml import etree
 import time
+from config import DB_PATH, get_xml_source_dir
 
-DB_NAME = 'pmda_v2.sqlite'
-XML_SOURCE_DIR = 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
+DB_NAME = DB_PATH
+XML_SOURCE_DIR = get_xml_source_dir() or 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 
 def update_phase1_fields_v2():
     """既存の医薬品データにフェーズ1フィールドを更新（v2スキーマ版）"""
@@ -29,12 +30,11 @@ def update_phase1_fields_v2():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
 
-    # 各medicineに対して、対応するspecificationからsource_fileを取得
+    # 各medicineのsource_fileを取得
     cur.execute("""
-        SELECT DISTINCT m.id, s.source_file
-        FROM medicines m
-        JOIN specifications s ON m.id = s.medicine_id
-        WHERE s.source_file LIKE '%.xml'
+        SELECT id, source_file
+        FROM medicines
+        WHERE source_file LIKE '%.xml'
     """)
 
     medicines = cur.fetchall()
