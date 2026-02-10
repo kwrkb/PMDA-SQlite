@@ -11,6 +11,9 @@ from typing import Optional
 # データベースファイルパス
 DB_PATH = 'data/pmda.sqlite'
 
+# JSON中間データディレクトリ
+JSON_DIR = 'data/json'
+
 # PMDAデータの基本ディレクトリ
 PMDA_RAW_DIR = 'data/PMDAraw'
 
