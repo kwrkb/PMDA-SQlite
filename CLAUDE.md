@@ -10,7 +10,7 @@ PMDA-SQLite converts Japanese pharmaceutical package insert data from PMDA (Phar
 
 The database uses a normalized 3-table schema:
 
-- **medicines**: Core drug information (generic_name, manufacturer, indications, contraindications, etc.)
+- **medicines**: Core drug information — 37 columns covering all 35 XML sections (generic_name, manufacturer, indications, adverse_events, use_in_pregnant, etc.)
 - **specifications**: Product variants (product_name, dosage_form, strength, yj_code, etc.)
 - **interactions**: Drug interactions linked to medicines (target_name, description, severity)
 
@@ -23,13 +23,18 @@ Multiple products (e.g., "Drug X 10mg tablet", "Drug X 50mg tablet") share the s
 
 ## Common Commands
 
-### Database Setup
+### Database Setup (recommended: JSON pipeline)
 
 ```bash
 source .venv/bin/activate
-python3 src/db_setup.py       # Create schema
-python3 src/load_data.py 10   # Test load (10 directories)
-python3 src/load_data.py      # Full load (~2-3 min)
+
+# Phase 1: XML → JSON変換（初回のみ）
+PYTHONPATH=src python3 src/xml_to_json.py
+
+# Phase 2: JSON → SQLite
+PYTHONPATH=src python3 src/db_setup.py
+PYTHONPATH=src python3 src/json_to_db.py 10   # Test load (10 directories)
+PYTHONPATH=src python3 src/json_to_db.py       # Full load (~30 sec)
 ```
 
 ### Testing
@@ -38,17 +43,24 @@ python3 src/load_data.py      # Full load (~2-3 min)
 python3 src/parse_product_name.py  # Run product name parser tests
 ```
 
+### Validation
+
+```bash
+PYTHONPATH=src python3 src/validate_json.py  # JSON quality report
+```
+
 ## File Organization
 
 ```
 src/
-├── config.py              # Shared config (DB path, XML directory auto-detection)
-├── db_setup.py            # Database schema creation
-├── load_data.py           # XML data loading
-├── parse_xml.py           # lxml-based XML parser
+├── config.py              # Shared config (DB path, XML/JSON directory paths)
+├── db_setup.py            # Database schema creation (37-column medicines table)
+├── xml_to_json.py         # Phase 1: XML → JSON lossless conversion
+├── validate_json.py       # JSON quality report & section coverage
+├── json_to_db.py          # Phase 2: JSON → SQLite loader (all 35 sections)
 ├── parse_product_name.py  # Product name parsing (has built-in tests)
-├── update_fields.py       # Phase 1 field updates
-└── update_changed_data.py # Differential update (template)
+├── parse_xml.py           # [DEPRECATED] lxml-based XML parser
+└── load_data.py           # [DEPRECATED] XML data loading
 
 docs/
 ├── V2_ISSUES.md              # Project status
@@ -56,16 +68,34 @@ docs/
 └── SPECIFICATION_COMPLIANCE.md # PMDA XML spec compliance
 
 data/
-└── pmda.sqlite            # Database file
+├── pmda.sqlite            # Database file
+└── json/                  # JSON intermediate files (18,023 files)
 ```
 
 ## Data Pipeline
 
-### XML Processing Flow
+### JSON Intermediate Pipeline (current)
 
-1. **Source:** `data/PMDAraw/pmda_all_sgml_xml_*/SGML_XML/` (auto-detected)
-2. **Parse:** `parse_xml.py` extracts data using lxml with proper namespace handling
-3. **Load:** `load_data.py` inserts data with deduplication
+```
+XML (data/PMDAraw/) → [xml_to_json.py] → JSON (data/json/)
+                                            ↓
+                                      [json_to_db.py]
+                                            ↓
+                                      SQLite (data/pmda.sqlite)
+```
+
+1. **Phase 1 — XML → JSON**: `xml_to_json.py` converts all XML to lossless JSON (one-time)
+2. **Phase 2 — JSON → SQLite**: `json_to_db.py` loads JSON into the extended schema
+
+### medicines Table Columns
+
+| Category | Columns |
+|----------|---------|
+| Basic | generic_name, manufacturer, revision_date, source_file |
+| Metadata | package_insert_no, company_identifier, sccj_no, therapeutic_classification |
+| Existing sections | indications, dosage, contraindications, warnings, important_precautions, efficacy_precautions, other_precautions, overdosage, pharmacokinetics |
+| UseInSpecificPopulations (8) | use_in_pregnant, use_in_nursing, pediatric_use, use_in_the_elderly, use_in_patients_with_complications, patients_with_hepatic_impairment, patients_with_renal_impairment, males_and_females_of_reproductive_potential |
+| New sections (16) | adverse_events, efficacy_pharmacology, precautions_for_application, physchem_of_act_ingredients, results_of_clinical_trials, precautions_for_handling, info_precautions_dosage, influence_on_laboratory_values, conditions_of_approval, attention_of_insurance, reference_information, specially_described_items, main_literature, addressee_of_literature_request, package_info, composition_and_property |
 
 ### Multi-Product XML Support
 
@@ -91,16 +121,13 @@ Invalid values (`-`, `－`, `―`, empty) trigger fallback.
 - Only inserts interactions when `is_new=True`
 - Prevents duplicate interaction data
 
-### Namespace Handling
+### JSON Structure (xml_to_json.py output)
 
-PMDA XML requires this namespace declaration:
-```python
-NAMESPACES = {
-    'p': 'http://info.pmda.go.jp/namespace/prescription_drugs/package_insert/1.0'
-}
-```
-
-Wrong namespaces silently fail to extract data.
+Each JSON node has: `_tag`, `_text`, `_tail`, `_attrib`, `_children`, `_comment`, `_pi`.
+Key helper functions in `json_to_db.py`:
+- `extract_text(node)` — recursively concatenate all text
+- `find_section(data, tag)` — find top-level section by tag name
+- `find_subsection(data, parent, child)` — find nested section
 
 ### Dosage Form Mapping
 
@@ -125,15 +152,25 @@ SELECT m.generic_name, i.target_name, i.description
 FROM medicines m
 JOIN interactions i ON m.id = i.medicine_id
 WHERE i.severity = 'contraindication'
+
+-- Full-text search (FTS5)
+SELECT product_name, generic_name
+FROM medicines_fts
+WHERE medicines_fts MATCH 'high blood pressure keyword'
+
+-- Adverse events for a drug
+SELECT m.generic_name, m.adverse_events
+FROM medicines m
+WHERE m.generic_name LIKE '%ワルファリン%'
 ```
 
-## Database Statistics (2026-01-15)
+## Database Statistics (2026-02-10)
 
 | Item | Count |
 |------|-------|
-| Medicines (package inserts) | 9,132 |
-| Specifications (products) | 16,726 |
-| Interactions | 6,925 |
+| Medicines (package inserts) | 9,888 |
+| Specifications (products) | 17,849 |
+| Interactions | 37,053 |
 
 ## Important Constraints
 
@@ -146,8 +183,8 @@ This database is for informational purposes only and must not be used for medica
 The database is a point-in-time snapshot. To update:
 ```bash
 rm data/pmda.sqlite
-python3 src/db_setup.py
-python3 src/load_data.py
+PYTHONPATH=src python3 src/db_setup.py
+PYTHONPATH=src python3 src/json_to_db.py
 ```
 
 ### NULL Handling
