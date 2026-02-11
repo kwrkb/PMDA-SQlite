@@ -1,4 +1,6 @@
 """
+DEPRECATED: json_to_db.py を使用してください。
+
 lxmlを使用したPMDA XMLパーサー（改善版）
 
 従来のxml.etree.ElementTreeから、より強力なlxmlに移行:
@@ -89,6 +91,23 @@ def extract_all_text(element) -> Optional[str]:
             texts.append(text.strip())
 
     return ' '.join(texts) if texts else None
+
+
+def normalize_text(text: Optional[str]) -> Optional[str]:
+    """
+    テキストを正規化します。
+
+    - 前後空白の削除
+    - 連続空白の圧縮
+    - 既知の制御表現（例: <?enter?>）の除去
+    """
+    if not text:
+        return None
+
+    normalized = text.replace('\u3000', ' ')
+    normalized = normalized.replace('<?enter?>', ' ').replace('<?Enter?>', ' ').replace('<?ENTER?>', ' ')
+    normalized = ' '.join(normalized.split())
+    return normalized if normalized else None
 
 
 def extract_structured_text(element) -> Optional[str]:
@@ -593,45 +612,42 @@ def extract_interactions(root) -> List[Dict[str, str]]:
     """
     interactions_data = []
 
+    def extract_drug_entries(parent_elem, severity_label: str, default_description: str):
+        drugs = parent_elem.xpath('.//p:Drug', namespaces=NAMESPACES)
+        for drug in drugs:
+            name_elem = drug.xpath('.//p:DrugName', namespaces=NAMESPACES)
+            drug_name = normalize_text(extract_all_text(name_elem[0])) if name_elem else None
+            if not drug_name:
+                continue
+
+            details = []
+            detail_elems = drug.xpath(
+                './/p:ClinSymptomsAndMeasures | .//p:ClinicalSymptom | '
+                './/p:MechanismAndRiskFactors | .//p:Mechanism | '
+                './/p:TreatmentMethod',
+                namespaces=NAMESPACES,
+            )
+            for elem in detail_elems:
+                detail_text = normalize_text(extract_all_text(elem))
+                if detail_text:
+                    details.append(detail_text)
+
+            description = ' '.join(details) if details else default_description
+            interactions_data.append({
+                'target_name': drug_name,
+                'description': description,
+                'severity': severity_label
+            })
+
     # 併用禁忌
     contraindicated = root.xpath('.//p:ContraIndicatedCombination', namespaces=NAMESPACES)
     for combo in contraindicated:
-        drug_names = combo.xpath('.//p:DrugName//p:Lang/text()', namespaces=NAMESPACES)
-        if drug_names:
-            drug_name = drug_names[0]
-
-            # 詳細情報を取得
-            details = []
-            for detail_type in ['p:ClinicalSymptom', 'p:Mechanism', 'p:TreatmentMethod']:
-                detail_texts = combo.xpath(f'.//{detail_type}//p:Lang/text()', namespaces=NAMESPACES)
-                details.extend(detail_texts)
-
-            description = ' '.join(details) if details else '併用禁忌'
-            interactions_data.append({
-                'target_name': drug_name.strip(),
-                'description': description,
-                'severity': 'contraindication'
-            })
+        extract_drug_entries(combo, 'contraindication', '併用禁忌')
 
     # 併用注意
     precautions = root.xpath('.//p:PrecautionsForCombination', namespaces=NAMESPACES)
     for combo in precautions:
-        drug_names = combo.xpath('.//p:DrugName//p:Lang/text()', namespaces=NAMESPACES)
-        if drug_names:
-            drug_name = drug_names[0]
-
-            # 詳細情報を取得
-            details = []
-            for detail_type in ['p:ClinicalSymptom', 'p:Mechanism', 'p:TreatmentMethod']:
-                detail_texts = combo.xpath(f'.//{detail_type}//p:Lang/text()', namespaces=NAMESPACES)
-                details.extend(detail_texts)
-
-            description = ' '.join(details) if details else '併用注意'
-            interactions_data.append({
-                'target_name': drug_name.strip(),
-                'description': description,
-                'severity': 'precaution'
-            })
+        extract_drug_entries(combo, 'precaution', '併用注意')
 
     return interactions_data
 
