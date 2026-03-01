@@ -94,7 +94,8 @@ def convert_xml_to_json(xml_path: str) -> dict:
     Returns:
         変換されたdict
     """
-    tree = etree.parse(xml_path)
+    parser = etree.XMLParser(resolve_entities=False)
+    tree = etree.parse(xml_path, parser)
     root = tree.getroot()
     return element_to_dict(root)
 

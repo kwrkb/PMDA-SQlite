@@ -671,7 +671,8 @@ def parse_xml_file(xml_path: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, 
     """
     try:
         # XMLをパース
-        tree = etree.parse(xml_path)
+        parser = etree.XMLParser(resolve_entities=False)
+        tree = etree.parse(xml_path, parser)
         root = tree.getroot()
 
         # 共通情報を抽出
