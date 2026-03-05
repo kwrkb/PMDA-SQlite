@@ -10,10 +10,10 @@ import sqlite3
 import os
 from glob import glob
 from typing import Dict, Set
-from parse_xml import parse_xml_file
-from load_data import process_xml_file
+from .parse_xml import parse_xml_file
+from .load_data import process_xml_file
+from .config import DB_PATH, get_xml_source_dir
 import time
-from config import DB_PATH, get_xml_source_dir
 
 DB_NAME = DB_PATH
 XML_SOURCE_DIR = get_xml_source_dir() or 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'

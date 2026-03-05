@@ -11,14 +11,14 @@ v2 改修: 1つのXMLから複数の製品データを抽出し、すべて登�
 
 import sqlite3
 import os
+import sys
 from glob import glob
 from typing import Dict, List, Tuple, Optional
-from parse_xml import parse_xml_file
-from parse_product_name import parse_product_name
-from config import DB_PATH, get_xml_source_dir
-from db_setup import rebuild_fts_index
+from .parse_xml import parse_xml_file
+from .parse_product_name import parse_product_name
+from .config import DB_PATH, get_xml_source_dir
+from .db_setup import rebuild_fts_index
 
-DB_NAME = DB_PATH
 XML_SOURCE_DIR = get_xml_source_dir() or 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
 
 def find_or_create_medicine(cur: sqlite3.Cursor, medicine_data: Dict) -> Tuple[Optional[int], bool]:
@@ -229,7 +229,7 @@ def load_all_xml_data(limit: Optional[int] = None):
     Args:
         limit: 処理件数の上限（Noneの場合は全件処理）
     """
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
 
     # XMLディレクトリ内のすべてのサブディレクトリを取得
     xml_subdirs = [
@@ -292,7 +292,7 @@ def load_all_xml_data(limit: Optional[int] = None):
 
 def print_database_stats():
     """データベースの統計情報を表示します。"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
     # 医薬品数
@@ -333,16 +333,19 @@ def print_database_stats():
     conn.close()
 
 
-if __name__ == '__main__':
-    import sys
-
+def main():
+    """エントリポイント用のmain関数"""
     if len(sys.argv) > 1:
         try:
             limit = int(sys.argv[1])
             load_all_xml_data(limit=limit)
         except ValueError:
             print("エラー: 引数は整数で指定してください")
-            print("使用例: python3 src/load_data.py 100")
+            print("使用例: pmda-load 100")
     else:
         # 全件処理
         load_all_xml_data(limit=None)
+
+
+if __name__ == '__main__':
+    main()
