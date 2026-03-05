@@ -2,7 +2,7 @@ import sqlite3
 import os
 from datetime import datetime
 
-from config import DB_PATH
+from .config import DB_PATH
 
 def setup_database():
     """データベースとテーブルを作成する"""

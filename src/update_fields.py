@@ -12,14 +12,14 @@ XMLファイルから以下のフィールドを抽出して更新:
 import sqlite3
 import os
 from glob import glob
-from parse_xml import (
+from .parse_xml import (
     extract_regulatory_classification,
     extract_composition,
     extract_overdosage
 )
+from .config import DB_PATH, get_xml_source_dir
 from lxml import etree
 import time
-from config import DB_PATH, get_xml_source_dir
 
 DB_NAME = DB_PATH
 XML_SOURCE_DIR = get_xml_source_dir() or 'data/PMDAraw/pmda_all_sgml_xml_20260114/SGML_XML'
