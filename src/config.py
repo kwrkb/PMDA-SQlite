@@ -14,11 +14,16 @@ DB_PATH = 'data/pmda.sqlite'
 # JSON中間データディレクトリ
 JSON_DIR = 'data/json'
 
-# PMDAデータの基本ディレクトリ
-PMDA_RAW_DIR = 'data/PMDAraw'
+# PMDAデータの基本ディレクトリ（環境変数で上書き可能。
+# ダウンロード先が data/PMDAraw/ と異なる場合に使う）
+PMDA_RAW_DIR = os.environ.get('PMDA_RAW_DIR', 'data/PMDAraw')
 
 # XMLソースディレクトリのパターン
 XML_DIR_PATTERN = 'pmda_all_sgml_xml_*'
+
+# PMDA公式XSLTスタイルシート（vendor/pmda-styles/ にコミット済み。
+# 取得元・更新手順は vendor/pmda-styles/SOURCE.md を参照）
+VENDOR_XSL_PATH = 'vendor/pmda-styles/preview_ja.xsl'
 
 
 def get_xml_source_dir(base_dir: str = PMDA_RAW_DIR) -> Optional[str]:

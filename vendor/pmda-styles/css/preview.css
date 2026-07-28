@@ -1,0 +1,277 @@
+﻿
+* {
+	margin: 0;
+	padding: 0;
+}
+
+html body {
+	width: 900px;
+	font-family: "游明朝", YuMincho, "ヒラギノ明朝 ProN W3", "Hiragino Mincho ProN", "HG明朝E", "ＭＳ Ｐ明朝", "ＭＳ 明朝", serif;
+}
+
+strong {
+	font-weight: bold;
+	font-family: 游ゴシック体, 'Yu Gothic', YuGothic, 'ヒラギノ角ゴシック Pro', 'Hiragino Kaku Gothic Pro', Osaka, 'ＭＳ Ｐゴシック', 'MS PGothic', sans-serif;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+td, th {
+	padding: 2px 5px;
+}
+
+li {
+	margin-left: 15px;
+}
+
+ul {
+	list-style-type: disc;
+}
+
+.container {
+	margin: 20px 50px;
+}
+
+.header {
+	font-size: 18px;
+	color: #000080;
+	margin-bottom: 10px;
+	overflow: hidden;
+}
+
+
+.contents {
+	font-size: 15px;
+}
+
+.displayBlock1 {
+	margin: 10px;
+}
+
+.displayBlock2 {
+	margin: 10px 0px 10px 15px;
+}
+
+.SpecialItem {
+	margin: 10px;
+	border: solid 1px black;
+}
+
+.Warnings {
+	margin: 10px;
+	border: solid 1px red;
+	color: red;
+}
+
+.ContraIndications {
+	margin: 10px;
+	padding: 3px;
+	border: solid 1px red;
+}
+
+.SimpleList {
+	list-style-type: none;
+}
+
+
+.section {
+	margin-top: 3px;
+	margin-bottom: 5px;
+}
+
+.section > h3 {
+	font-size: 16px;
+}
+
+.section > div {
+	margin-left: 18px;
+	font-size: 15px;
+}
+
+.section_header {
+	font-weight: bold;
+	font-family: 游ゴシック体, 'Yu Gothic', YuGothic, 'ヒラギノ角ゴシック Pro', 'Hiragino Kaku Gothic Pro', Osaka, 'ＭＳ Ｐゴシック', 'MS PGothic', sans-serif;
+}
+
+/* VariousForm */
+
+div.VariousForm ol {
+	list-style-type: none;
+}
+
+div.VariousForm ol > li:before {
+	content: "";
+	margin-left: -15px;
+}
+
+div.VariousForm table {
+	margin-bottom: 12px;
+}
+
+div.VariousForm figure {
+	margin: 12px 0px;
+}
+
+div.VariousForm p {
+	margin-bottom: 8px;
+}
+
+div.VariousForm th > p {
+	margin-bottom: 0px;
+}
+
+div.VariousForm span.Header-preview {
+	font-weight: bold;
+	font-family: 游ゴシック体, 'Yu Gothic', YuGothic, 'ヒラギノ角ゴシック Pro', 'Hiragino Kaku Gothic Pro', Osaka, 'ＭＳ Ｐゴシック', 'MS PGothic', sans-serif;
+}
+
+/* HeaderDetailList型の表示 */
+
+.HeaderDetailList ol {
+	list-style-type: none;
+}
+
+.HeaderDetailList ol > li:before {
+	content: "";
+	margin-left: -15px;
+}
+
+
+.frame {
+	border: solid 1px #000;
+	margin-top: 10px;
+	padding: 5px;
+	padding-left: 30px;
+}
+
+.red {
+	color: red;
+	border: solid 1px #f00;
+}
+
+.frame-red {
+	border: solid 1px red;
+}
+
+.tableFooter {
+	border-bottom: hidden;
+	border-left: hidden;
+	border-right: hidden;
+}
+
+.tableFooter > td {
+	word-break: normal;
+	text-align: right;
+}
+
+.ContraIndication_table, .ContraIndication_table td, .ContraIndication_table th {
+	border: solid 1px #ff0000;
+}
+
+div#HDR_Interactions table th {
+	font-weight: normal;
+}
+
+
+div#HDR_OtherAdverseEvents table th {
+	font-weight: normal;
+}
+
+div#HDR_OtherAdverseEvents tbody > tr > th{
+	text-align:left;
+}
+
+div#HDR_IndicationsOrEfficacy {
+	font-weight: bold;
+	font-family: 游ゴシック体, 'Yu Gothic', YuGothic, 'ヒラギノ角ゴシック Pro', 'Hiragino Kaku Gothic Pro', Osaka, 'ＭＳ Ｐゴシック', 'MS PGothic', sans-serif;
+}
+
+div#HDR_IndicationsOrEfficacy ul>li {
+	list-style-type: none;
+}
+
+div#HDR_IndicationsOrEfficacy ul>li:before {
+	content: '○';
+}
+
+div#HDR_IndicationsOrEfficacy ul.SimpleList>li {
+	list-style-type: none;
+}
+
+div#HDR_IndicationsOrEfficacy ul.SimpleList>li:before {
+	margin-left: 0px;
+	content: '';
+}
+
+.tableFooter > th {
+	font-size: 0.8em;
+	font-weight: normal;
+	word-break: normal;
+	text-align: right;
+}
+
+.revisionPrev-editor, .revisionThis-editor, .revisionPrevThis-editor {
+	display: none;
+}
+
+/* 自由表内の改訂記号を表示 */
+table.TblBlock_table span.revisionPrevThis-editor, table.TblBlock_table span.revisionThis-editor, table.TblBlock_table span.revisionPrev-editor {
+	display: inline;
+}
+
+/* 組成・性状表内の改訂記号を表示 */
+table.CompositionAndProperty_table span.revisionPrevThis-editor, table.CompositionAndProperty_table span.revisionThis-editor, table.CompositionAndProperty_table span.revisionPrev-editor {
+	display: inline;
+}
+
+/* 併用禁忌表内の改訂記号を表示 */
+table.ContraIndication_table span.revisionPrevThis-editor, table.ContraIndication_table span.revisionThis-editor, table.ContraIndication_table span.revisionPrev-editor {
+	display: inline;
+}
+
+/* 併用注意表内の改訂記号を表示 */
+table.PrecautionsForCombi_table span.revisionPrevThis-editor, table.PrecautionsForCombi_table span.revisionThis-editor, table.PrecautionsForCombi_table span.revisionPrev-editor {
+	display: inline;
+}
+
+/* その他の副作用表内の改訂記号を表示 */
+table.OtherAdverse_table span.revisionPrevThis-editor, table.OtherAdverse_table span.revisionThis-editor, table.OtherAdverse_table span.revisionPrev-editor {
+	display: inline;
+}
+
+/* 文章を強制改行させる */
+.wordBreak {
+	word-break: break-all;
+}
+
+/* 組成・性状の不要な罫線を不可視に変更 */
+div#HDR_Composition table tr th:nth-child(1) {
+	//border-bottom: hidden;
+}
+div#HDR_Property table tr th:nth-child(1) {
+	//border-right: hidden;
+}
+div#HDR_Property table tr:nth-child(2) td:nth-child(1) {
+	//border-top: hidden;
+}
+
+/* 有効成分に関する理化学的知見 一般名の表示調整 */
+div.GeneralName-display div.VariousForm, div.GeneralName-display p {
+	display: inline;
+}
+
+/* 繰り返し要素の表示調整 */
+div.RepeatingElements {
+	margin-bottom: 1em;
+}
+
+/* 併用禁忌と併用注意の指示文領域の表示調整 */
+#HDR_ContraIndicatedCombinations .VariousForm > p {
+	margin-bottom: 0em;
+}
+#HDR_PrecautionsForCombinations .VariousForm > p {
+	margin-bottom: 0em;
+}
+

@@ -2,7 +2,47 @@ import sqlite3
 import os
 from datetime import datetime
 
-from .config import DB_PATH
+from config import DB_PATH
+
+# HDR_<XMLタグ名> -> 旧medicinesカラム名の対応（medicines_legacy VIEW で使用）。
+# 旧 src/json_to_db.py の section_map / new_section_map / use_in_map と同じ
+# タグ名を、PMDA公式XSLが付与する id="HDR_<タグ名>" 形式にマッピングしたもの。
+LEGACY_COLUMN_MAP = {
+    "indications": "HDR_IndicationsOrEfficacy",
+    "dosage": "HDR_InfoDoseAdmin",
+    "contraindications": "HDR_ContraIndications",
+    "warnings": "HDR_Warnings",
+    "important_precautions": "HDR_ImportantPrecautions",
+    "efficacy_precautions": "HDR_EfficacyRelatedPrecautions",
+    "other_precautions": "HDR_OtherPrecautions",
+    "overdosage": "HDR_OverDosage",
+    "pharmacokinetics": "HDR_Pharmacokinetics",
+    "use_in_pregnant": "HDR_UseInPregnant",
+    "use_in_nursing": "HDR_UseInNursing",
+    "pediatric_use": "HDR_PediatricUse",
+    "use_in_the_elderly": "HDR_UseInTheElderly",
+    "use_in_patients_with_complications": "HDR_UseInPatientsWithComplicationsOrHistoryOfDiseasesEtc",
+    "patients_with_hepatic_impairment": "HDR_PatientsWithHepaticImpairment",
+    "patients_with_renal_impairment": "HDR_PatientsWithRenalImpairment",
+    "males_and_females_of_reproductive_potential": "HDR_MalesAndFemalesOfReproductivePotential",
+    "adverse_events": "HDR_AdverseEvents",
+    "efficacy_pharmacology": "HDR_EfficacyPharmacology",
+    "precautions_for_application": "HDR_PrecautionsForApplication",
+    "physchem_of_act_ingredients": "HDR_PhyschemOfActIngredients",
+    "results_of_clinical_trials": "HDR_ResultsOfClinicalTrials",
+    "precautions_for_handling": "HDR_PrecautionsForHandling",
+    "info_precautions_dosage": "HDR_InfoPrecautionsDosage",
+    "influence_on_laboratory_values": "HDR_InfluenceOnLaboratoryValues",
+    "conditions_of_approval": "HDR_ConditionsOfApproval",
+    "attention_of_insurance": "HDR_AttentionOfInsurance",
+    "reference_information": "HDR_ReferenceInformation",
+    "specially_described_items": "HDR_SpeciallyDescribedItems",
+    "main_literature": "HDR_MainLiterature",
+    "addressee_of_literature_request": "HDR_AddresseeOfLiteratureRequest",
+    "package_info": "HDR_Package",
+    "composition_and_property": "HDR_CompositionAndProperty",
+}
+
 
 def setup_database():
     """データベースとテーブルを作成する"""
@@ -15,59 +55,24 @@ def setup_database():
 
     print(f"Setting up database at {DB_PATH}...")
 
-    # 1. medicines テーブル（添付文書・共通情報）
+    # 1. medicines テーブル（添付文書の識別情報・メタデータのみ）
+    #    本文は sections テーブルに正規化して格納する（XSL_SPIKE.md 参照）。
+    #    1 XML = 1 medicines とし、package_insert_no を一意キーにする
+    #    （旧スキーマの (generic_name, manufacturer) 重複排除は
+    #    18,023 XML → 9,888 medicines と約8,100件の本文を捨てていたため廃止）。
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS medicines (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         generic_name TEXT NOT NULL,
         manufacturer TEXT,
         revision_date TEXT,
-        source_file TEXT NOT NULL UNIQUE,
+        source_file TEXT NOT NULL,
 
         -- メタデータ
-        package_insert_no TEXT,
+        package_insert_no TEXT NOT NULL UNIQUE,
         company_identifier TEXT,
         sccj_no TEXT,
         therapeutic_classification TEXT,
-
-        -- 共通の効能・用法・注意（既存）
-        indications TEXT,
-        dosage TEXT,
-        contraindications TEXT,
-        warnings TEXT,
-        important_precautions TEXT,
-        efficacy_precautions TEXT,
-        other_precautions TEXT,
-        overdosage TEXT,
-        pharmacokinetics TEXT,
-
-        -- UseInSpecificPopulations 展開（8列）
-        use_in_pregnant TEXT,
-        use_in_nursing TEXT,
-        pediatric_use TEXT,
-        use_in_the_elderly TEXT,
-        use_in_patients_with_complications TEXT,
-        patients_with_hepatic_impairment TEXT,
-        patients_with_renal_impairment TEXT,
-        males_and_females_of_reproductive_potential TEXT,
-
-        -- 追加セクション（Phase 2 新規）
-        adverse_events TEXT,
-        efficacy_pharmacology TEXT,
-        precautions_for_application TEXT,
-        physchem_of_act_ingredients TEXT,
-        results_of_clinical_trials TEXT,
-        precautions_for_handling TEXT,
-        info_precautions_dosage TEXT,
-        influence_on_laboratory_values TEXT,
-        conditions_of_approval TEXT,
-        attention_of_insurance TEXT,
-        reference_information TEXT,
-        specially_described_items TEXT,
-        main_literature TEXT,
-        addressee_of_literature_request TEXT,
-        package_info TEXT,
-        composition_and_property TEXT,
 
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -137,23 +142,57 @@ def setup_database():
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_interactions_target_name ON interactions(target_name)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_interactions_severity ON interactions(severity)')
 
+    # 4. sections テーブル（本文をセクション単位で正規化。XSL_SPIKE.md 参照）
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS sections (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        medicine_id INTEGER NOT NULL,
+        ord         INTEGER NOT NULL,  -- 文書内出現順
+        xml_id      TEXT,              -- 'HDR_AdverseEvents' 等。空になりうる
+        section_no  TEXT,              -- '9.2' 等（浮動小数点誤差を丸め済み）
+        heading     TEXT,              -- 項番を除いた見出し文言
+        level       TEXT,              -- data-level属性。'99'は「階層なし」の番兵値なのでTEXT
+        body_md     TEXT,              -- Markdown化した本文
+        FOREIGN KEY (medicine_id) REFERENCES medicines(id) ON DELETE CASCADE
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sections_medicine_id ON sections(medicine_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sections_xml_id ON sections(xml_id)')
+
     # 全文検索用仮想テーブル (FTS5)
-    # adverse_events, therapeutic_classification を検索対象に追加
+    # トークナイザは trigram にする。既定の unicode61 は日本語を分かち書きできず
+    # MATCH '高血圧' のような検索が実質機能しないため（XSL_SPIKE.md 参照）。
     try:
         cursor.execute('''
-        CREATE VIRTUAL TABLE IF NOT EXISTS medicines_fts USING fts5(
-            product_name,
-            generic_name,
-            indications,
-            adverse_events,
-            therapeutic_classification,
-            spec_id UNINDEXED,
-            medicine_id UNINDEXED
+        CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5(
+            heading,
+            body_md,
+            section_id UNINDEXED,
+            medicine_id UNINDEXED,
+            tokenize='trigram'
         )
         ''')
-        print("FTS5 table created successfully.")
+        print("FTS5 table (trigram) created successfully.")
     except Exception as e:
         print(f"Skipping FTS5 table creation: {e}")
+
+    # medicines_legacy 互換VIEW: sections を HDR_* ごとにPIVOTし、
+    # 旧35カラムスキーマ(json_to_db.py の section_map 等)と同じ形で読めるようにする。
+    # 実体は sections に一元化し、既存クエリ資産はこのVIEW越しに使う。
+    legacy_selects = ",\n        ".join(
+        f"MAX(CASE WHEN s.xml_id = '{hdr_id}' THEN s.body_md END) AS {col}"
+        for col, hdr_id in LEGACY_COLUMN_MAP.items()
+    )
+    cursor.execute(f'''
+        CREATE VIEW IF NOT EXISTS medicines_legacy AS
+        SELECT
+            m.id, m.generic_name, m.manufacturer, m.revision_date, m.source_file,
+            m.package_insert_no, m.company_identifier, m.sccj_no, m.therapeutic_classification,
+            {legacy_selects}
+        FROM medicines m
+        LEFT JOIN sections s ON s.medicine_id = m.id
+        GROUP BY m.id
+    ''')
 
     conn.commit()
     conn.close()
@@ -164,8 +203,7 @@ def rebuild_fts_index():
     """
     FTS5インデックスを再構築します。
 
-    medicines と specifications テーブルを結合し、
-    全文検索用のインデックスを作成します。
+    sections と medicines を結合し、全文検索用のインデックスを作成します。
     """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -174,25 +212,12 @@ def rebuild_fts_index():
 
     try:
         # 既存データを削除
-        cursor.execute('DELETE FROM medicines_fts')
+        cursor.execute('DELETE FROM sections_fts')
 
-        # medicines と specifications を結合してFTS5に挿入
         cursor.execute('''
-            INSERT INTO medicines_fts (
-                product_name, generic_name, indications,
-                adverse_events, therapeutic_classification,
-                spec_id, medicine_id
-            )
-            SELECT
-                s.product_name,
-                m.generic_name,
-                m.indications,
-                m.adverse_events,
-                m.therapeutic_classification,
-                s.id,
-                m.id
-            FROM specifications s
-            JOIN medicines m ON s.medicine_id = m.id
+            INSERT INTO sections_fts (heading, body_md, section_id, medicine_id)
+            SELECT s.heading, s.body_md, s.id, s.medicine_id
+            FROM sections s
         ''')
 
         inserted = cursor.rowcount

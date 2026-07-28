@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<StandardNames>
+	<StandardName>
+		<Item code="1">
+			<Lang xml:lang="ja">日本薬局方</Lang>
+			<Lang xml:lang="en">Item-1</Lang>
+		</Item>
+		<Item code="2">
+			<Lang xml:lang="ja">生物学的製剤基準</Lang>
+			<Lang xml:lang="en">Item-2</Lang>
+		</Item>
+		<Item code="3">
+			<Lang xml:lang="ja">放射性医薬品基準</Lang>
+			<Lang xml:lang="en">Item-3</Lang>
+		</Item>
+		<Item code="4">
+			<Lang xml:lang="ja">血液型判定用抗体基準</Lang>
+			<Lang xml:lang="en">Item-4</Lang>
+		</Item>
+	</StandardName>
+	<Selection>
+		<Item id="1">
+			<Code>1</Code>
+			<Label>
+				<Lang xml:lang="ja">日本薬局方</Lang>
+				<Lang xml:lang="en">Label-1</Lang>
+			</Label>
+		</Item>
+		<Item id="2">
+			<Code>2</Code>
+			<Label>
+				<Lang xml:lang="ja">生物学的製剤基準</Lang>
+				<Lang xml:lang="en">Label-2</Lang>
+			</Label>
+		</Item>
+		<Item id="3">
+			<Code>3</Code>
+			<Label>
+				<Lang xml:lang="ja">放射性医薬品基準</Lang>
+				<Lang xml:lang="en">Label-3</Lang>
+			</Label>
+		</Item>
+		<Item id="4">
+			<Code>4</Code>
+			<Label>
+				<Lang xml:lang="ja">血液型判定用抗体基準</Lang>
+				<Lang xml:lang="en">Label-4</Lang>
+			</Label>
+		</Item>
+	</Selection>
+</StandardNames>
