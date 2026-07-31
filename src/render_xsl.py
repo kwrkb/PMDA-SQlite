@@ -39,18 +39,34 @@ def fix_float_section_no(s: str) -> str:
     return FLOAT_ARTIFACT_RE.sub(_round_token, s)
 
 
-# --- 落とし穴2: 空の相互作用リンクの残骸 ---
+# --- 落とし穴2: 相互参照リンクの本文がJS側で埋められる ---
 #
-# <a class="HeaderRef" href="#HDR_XXX"></a> は中身が空で、JS側でツールチップ化
-# される想定の相互参照リンク。この間に区切りの読点がテキストとして直接
-# 埋め込まれているため、そのままテキスト抽出すると孤立したカンマが残る
-# （例: '…おそれがある。],,'）。tail（直後のカンマ）ごと削除する。
-def strip_header_refs(root) -> None:
+# <a class="HeaderRef" href="#HDR_XXX"></a> は中身が空のまま出力され、
+# 参照先の項番テキストは vendor/pmda-styles/js/preview.js（見出し参照の
+# テキスト挿入。156-173行目）がブラウザ上で埋める:
+#   #Header-data の [data-header-id=<id>] のテキスト → '［10.2 参照］'
+#   参照先が無い場合                                 → '（見出し参照切れ）'
+# DB化ではJSを実行しないため、同じ解決処理をここで再現する。
+# 単に要素ごと削除すると「［10.2 参照］」という医学的に意味のある相互参照が
+# body_md から失われる。
+#
+# 空要素のまま残すと、リンクの区切りとしてXSLが出力する読点だけが孤立し
+# '…おそれがある。],,' のような残骸になるが、テキストを埋めれば
+# '［10.2 参照］,［10.3 参照］' と自然な形に収まる。
+HEADER_REF_BROKEN_TEXT = "（見出し参照切れ）"
+
+
+def resolve_header_refs(root, header_map: dict) -> None:
+    """HeaderRefアンカーに参照先の項番テキストを埋める（preview.js相当）。"""
     for el in root.xpath('//a[@class="HeaderRef"]'):
-        el.tail = None
-        parent = el.getparent()
-        if parent is not None:
-            parent.remove(el)
+        href = (el.get("href") or "").lstrip("#")
+        no = header_map.get(href, "")
+        if no:
+            el.text = f"［{no} 参照］"
+        else:
+            # 参照切れ。preview.js は data-remarks を title 属性に退避するが、
+            # Markdown化では属性を保持できないため文言だけ残す。
+            el.text = HEADER_REF_BROKEN_TEXT
 
 
 def strip_number_prefix(heading_text: str) -> str:
@@ -75,7 +91,7 @@ def transform_xml(xslt: etree.XSLT, xml_path: str):
     result = xslt(xml_doc)
     html_bytes = etree.tostring(result, method="html", encoding="utf-8")
     root = html.fromstring(html_bytes)
-    strip_header_refs(root)
+    resolve_header_refs(root, _build_header_no_map(root))
     return root
 
 
@@ -142,19 +158,37 @@ def extract_sections(root) -> List[dict]:
     return sections
 
 
-if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) < 2:
-        print("使用例: python src/render_xsl.py <XMLファイルパス>")
-        sys.exit(1)
-
+def _run_tests():
     # 落とし穴1の回帰テスト
     assert fix_float_section_no("9.199999999999999") == "9.2", "四捨五入が壊れています(9.1になってはいけない)"
     assert fix_float_section_no("9.699999999999999") == "9.7"
     assert fix_float_section_no("9.800000000000001") == "9.8"
     assert fix_float_section_no("3.1") == "3.1"
     print("回帰テストOK: fix_float_section_no")
+
+    # 落とし穴2の回帰テスト: HeaderRefの参照テキスト解決（preview.js相当）
+    doc = html.fromstring(
+        '<div><div class="contents"><p>出血のおそれがある。'
+        '[<a class="HeaderRef" href="#HDR_A"></a>]'
+        '[<a class="HeaderRef" href="#HDR_MISSING"></a>]</p></div>'
+        '<div id="Header-data">'
+        '<div data-header-id="HDR_A">9.199999999999999</div></div></div>'
+    )
+    resolve_header_refs(doc, _build_header_no_map(doc))
+    refs = [a.text for a in doc.xpath('//a[@class="HeaderRef"]')]
+    assert refs[0] == "［9.2 参照］", f"参照テキストが解決されていません: {refs[0]!r}"
+    assert refs[1] == HEADER_REF_BROKEN_TEXT, f"参照切れの扱いが不正: {refs[1]!r}"
+    print("回帰テストOK: resolve_header_refs")
+
+
+if __name__ == "__main__":
+    import sys
+
+    _run_tests()
+
+    if len(sys.argv) < 2:
+        print("使用例: python src/render_xsl.py <XMLファイルパス>")
+        sys.exit(0)
 
     xslt = load_xslt()
     root = transform_xml(xslt, sys.argv[1])
