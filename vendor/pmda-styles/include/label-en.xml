@@ -1,0 +1,191 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<label>
+	<DrugType>DrugType</DrugType>
+	<DrugTypeItems>
+		<Item id="Medicine">医療用医薬品</Item>
+		<Item id="Vaccine">ワクチン類及びトキソイド類</Item>
+		<Item id="Antitoxin">抗毒素及び検査に用いる生物学的製剤、膀注用BCG</Item>
+		<Item id="BloodProduct">全血製剤、血液成分製剤</Item>
+	</DrugTypeItems>
+
+	<PackageInsertNo>PackageInsertNo</PackageInsertNo>
+	<CompanyIdentifier>CompanyIdentifier</CompanyIdentifier>
+
+	<DateOfPreparationOrRevision>DateOfPreparationOrRevision</DateOfPreparationOrRevision>
+	
+	<Sccj>Sccj</Sccj>
+	
+	<TherapeuticClassification>TherapeuticClassification</TherapeuticClassification>
+	
+	<ApprovalEtc>ApprovalEtc</ApprovalEtc>
+	
+	<ApprovalBrandName>ApprovalBrandName</ApprovalBrandName>
+	
+	<BrandCode>BrandCode</BrandCode>
+	<YJCode>YJCode</YJCode>
+	<Code>Code</Code>
+	
+	<TrademarkInEnglish>TrademarkInEnglish</TrademarkInEnglish>
+	
+	<BrandNameInHiragana>BrandNameInHiragana</BrandNameInHiragana>
+	
+	<ApprovalAndLicenseNo>ApprovalAndLicenseNo</ApprovalAndLicenseNo>
+	<ApprovalNo>ApprovalNo</ApprovalNo>
+	<LicenseNo>LicenseNo</LicenseNo>
+	
+	<StartingDateOfMarketing>StartingDateOfMarketing</StartingDateOfMarketing>
+	
+	<Storage>Storage</Storage>
+	<StorageMethod>StorageMethod</StorageMethod>
+	<ShelfLife>ShelfLife</ShelfLife>
+	
+	<StandardName>StandardName</StandardName>
+	
+	<RegulatoryClassification>RegulatoryClassification</RegulatoryClassification>
+	
+	<SupplementaryInformationOfProduct>SupplementaryInformationOfProduct</SupplementaryInformationOfProduct>
+	
+	<GenericName>GenericName</GenericName>
+	
+	<SupplementaryInformaitonOfVaccineStrain>SupplementaryInformaitonOfVaccineStrain</SupplementaryInformaitonOfVaccineStrain>
+	
+	<SpeciallyDescribedItems>SpecialItem（* Use this item only when indicated by MHLW.）</SpeciallyDescribedItems>
+	
+	<SpeciallyDescribedItems>SpeciallyDescribedItems</SpeciallyDescribedItems>
+	
+	<Warnings>Warnings</Warnings>
+	
+	<ContraIndications>ContraIndications</ContraIndications>
+	
+	<CompositionAndProperty>CompositionAndProperty</CompositionAndProperty>
+	
+	<OverviewOfRecipe>OverviewOfRecipe</OverviewOfRecipe>
+	
+	<Composition>Composition</Composition>
+	<OverviewOfComposition>OverviewOfComposition</OverviewOfComposition>
+	<ConstituentUnits>ConstituentUnits</ConstituentUnits>
+	<ContainedAmount>ContainedAmount</ContainedAmount>
+	<ActiveIngredient>ActiveIngredient</ActiveIngredient>
+	<ActiveIngredientName>ActiveIngredient</ActiveIngredientName>
+	<ValueAndUnit>ValueAndUnit</ValueAndUnit>
+	<Additives>Additives</Additives>
+	<ListOfAdditives>ListOfAdditives</ListOfAdditives>
+	<IndividualAdditive>IndividualAdditive</IndividualAdditive>
+	<OtherComposition>OtherComposition</OtherComposition>	
+	<CategoryName>CategoryName</CategoryName>
+	<ContentTitle>ContentTitle</ContentTitle>
+	<ContentDetail>ContentDetail</ContentDetail>
+	<CompositionAndPropertyTblTitle>CompositionAndPropertyTblTitle</CompositionAndPropertyTblTitle>
+	<CompositionAndPropertyTblFoot>CompositionAndPropertyTblFoot</CompositionAndPropertyTblFoot>
+	<CompositionCommentsForConstituentUnits>CommentsForConstituentUnits</CompositionCommentsForConstituentUnits>
+	<CompositionComments>CompositionComments</CompositionComments>
+	
+	<Property>Property</Property>
+	<OverviewOfProperty>OverviewOfProperty</OverviewOfProperty>
+	<Formulation>Formulation</Formulation>
+	<ColorTone>ColorTone</ColorTone>
+	<Shape>Shape</Shape>
+	<ShapeFront>ShapeFront</ShapeFront>
+	<ShapeBack>ShapeBack</ShapeBack>
+	<ShapeSide>ShapeSide</ShapeSide>
+	<Size>Size</Size>
+	<SizeDiameter>SizeDiameter</SizeDiameter>
+	<SizeLongDiameter>SizeLongDiameter</SizeLongDiameter>
+	<SizeShortDiameter>SizeShortDiameter</SizeShortDiameter>
+	<SizeTotalLength>SizeTotalLength</SizeTotalLength>
+	<SizeThickness>SizeThickness</SizeThickness>
+	<SizeArea>SizeArea</SizeArea>
+	<SizeNumber>SizeNumber</SizeNumber>
+	<Weight>Weight</Weight>
+	<IdCode>IdCode</IdCode>
+	<pH>pH</pH>
+	<OsmoticRatio>OsmoticRatio</OsmoticRatio>
+	<Odor>Odor</Odor>
+	<Taste>Taste</Taste>
+	<Note>Note</Note>
+	<OtherProperty>OtherProperty</OtherProperty>
+	
+	<PropertyCommentsForConstituentUnits>CommentsForConstituentUnits</PropertyCommentsForConstituentUnits>
+	
+	<IndicationsOrEfficacy>IndicationsOrEfficacy</IndicationsOrEfficacy>
+	<EfficacyRelatedPrecautions>EfficacyRelatedPrecautions</EfficacyRelatedPrecautions>
+	<InfoDoseAdmin>InfoDoseAdmin</InfoDoseAdmin>
+	<OtherRelatedMatters>OtherRelatedMatters</OtherRelatedMatters>
+	<InfoPrecautionsDosage>InfoPrecautionsDosage</InfoPrecautionsDosage>
+	
+	<ImportantPrecautions>ImportantPrecautions</ImportantPrecautions>
+	
+	<UseInSpecificPopulations>UseInSpecificPopulations</UseInSpecificPopulations>
+	<UseInPatientsWithComplicationsOrHistoryOfDiseasesEtc>UseInPatientsWithComplicationsOrHistoryOfDiseasesEtc</UseInPatientsWithComplicationsOrHistoryOfDiseasesEtc>
+	<PatientsWithRenalImpairment>PatientsWithRenalImpairment</PatientsWithRenalImpairment>
+	<PatientsWithHepaticImpairment>PatientsWithHepaticImpairment</PatientsWithHepaticImpairment>
+	<MalesAndFemalesOfReproductivePotential>MalesAndFemalesOfReproductivePotential</MalesAndFemalesOfReproductivePotential>
+	<UseInPregnant>UseInPregnant</UseInPregnant>
+	<UseInNursing>UseInNursing</UseInNursing>
+	<PediatricUse>PediatricUse</PediatricUse>
+	<UseInTheElderly>UseInTheElderly</UseInTheElderly>
+	
+	<Interactions>Interactions</Interactions>
+	<SummaryOfCombination>SummaryOfCombination</SummaryOfCombination>
+	<ContraIndicatedCombinations>ContraIndicatedCombinations</ContraIndicatedCombinations>
+	<PrecautionsForCombinations>PrecautionsForCombinations</PrecautionsForCombinations>
+	<Names>Names</Names>
+	<ClinSymptomsAndMeasures>ClinSymptomsAndMeasures</ClinSymptomsAndMeasures>
+	<MechanismAndRiskFactors>MechanismAndRiskFactors</MechanismAndRiskFactors>
+	
+	<AdverseEvents>AdverseEvents</AdverseEvents>
+	<CommonPrecautionsForAdverse>CommonPrecautionsForAdverse</CommonPrecautionsForAdverse>
+	<SeriousAdverseEvents>SeriousAdverseEvents</SeriousAdverseEvents>
+	<OtherAdverseEvents>OtherAdverseEvents</OtherAdverseEvents>
+	<CommonExplanatoryNotesForAdverse>CommonExplanatoryNotesForAdverse</CommonExplanatoryNotesForAdverse>
+	
+	<InfluenceOnLaboratoryValues>InfluenceOnLaboratoryValues</InfluenceOnLaboratoryValues>
+	
+	<OverDosage>OverDosage</OverDosage>
+	
+	<PrecautionsForApplication>PrecautionsForApplication</PrecautionsForApplication>
+	
+	<OtherPrecautions>OtherPrecautions</OtherPrecautions>
+	<InformationBasedOnClinicalUse>InformationBasedOnClinicalUse</InformationBasedOnClinicalUse>
+	<InformationBasedOnNonclinicalStudies>InformationBasedOnNonclinicalStudies</InformationBasedOnNonclinicalStudies>
+	
+	<Pharmacokinetics>Pharmacokinetics</Pharmacokinetics>
+	<BloodLevel>BloodLevel</BloodLevel>
+	<Absorption>Absorption</Absorption>
+	<Distribution>Distribution</Distribution>
+	<Metabolism>Metabolism</Metabolism>
+	<Excretion>Excretion</Excretion>
+	<SpecificPopulation>SpecificPopulation</SpecificPopulation>
+	<DrugAndDrugInteractions>DrugAndDrugInteractions</DrugAndDrugInteractions>
+	<PharmacokineticsEtc>PharmacokineticsEtc</PharmacokineticsEtc>
+	
+	<ResultsOfClinicalTrials>ResultsOfClinicalTrials</ResultsOfClinicalTrials>
+	<EfficacyAndSafety>EfficacyAndSafety</EfficacyAndSafety>
+	<PostMarketingSurveylancesEtc>PostMarketingSurveylancesEtc</PostMarketingSurveylancesEtc>
+	<ResultsOfClinicalTrialsEtc>ResultsOfClinicalTrialsEtc</ResultsOfClinicalTrialsEtc>
+	
+	<EfficacyPharmacology>EfficacyPharmacology</EfficacyPharmacology>
+	<MechanismOfAction>MechanismOfAction</MechanismOfAction>
+	<MeasurementMethod>MeasurementMethod</MeasurementMethod>
+	
+	<PhyschemOfActIngredients>PhyschemOfActIngredients</PhyschemOfActIngredients>
+	<GeneralName>GeneralName</GeneralName>
+	<ChemicalName>ChemicalName</ChemicalName>
+	<MolecularFormula>MolecularFormula</MolecularFormula>
+	<MolecularWeight>MolecularWeight</MolecularWeight>
+	<DescriptionOfActiveIngredients>DescriptionOfActiveIngredients</DescriptionOfActiveIngredients>
+	<StructuralFormula>StructuralFormula</StructuralFormula>
+	<MeltingPoint>MeltingPoint</MeltingPoint>
+	<PartitionCoefficient>PartitionCoefficient</PartitionCoefficient>
+	<Nature>Nature</Nature>
+	<NucleophysicalProperties>NucleophysicalProperties</NucleophysicalProperties>
+	
+	<PrecautionsForHandling>PrecautionsForHandling</PrecautionsForHandling>
+	<ConditionsOfApproval>ConditionsOfApproval</ConditionsOfApproval>
+	<Package>Package</Package>
+	<MainLiterature>MainLiterature</MainLiterature>
+	<AddresseeOfLiteratureRequest>AddresseeOfLiteratureRequest</AddresseeOfLiteratureRequest>
+	<AttentionOfInsurance>AttentionOfInsurance</AttentionOfInsurance>
+	<NameAddressManufact>NameAddressManufact</NameAddressManufact>
+	<ReferenceInformation>ReferenceInformation</ReferenceInformation>
+</label>

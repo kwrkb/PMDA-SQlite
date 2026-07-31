@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RegulatoryClassifications>
+	<RegulatoryClassification>
+		<Item code="1">
+			<Lang xml:lang="ja">毒薬</Lang>
+			<Lang xml:lang="en">Item-1</Lang>
+		</Item>
+		<Item code="2">
+			<Lang xml:lang="ja">劇薬</Lang>
+			<Lang xml:lang="en">Item-2</Lang>
+		</Item>
+		<Item code="3">
+			<Lang xml:lang="ja">麻薬</Lang>
+			<Lang xml:lang="en">Item-3</Lang>
+		</Item>
+		<Item code="4">
+			<Lang xml:lang="ja">向精神薬</Lang>
+			<Lang xml:lang="en">Item-4</Lang>
+		</Item>
+		<Item code="5">
+			<Lang xml:lang="ja">覚醒剤</Lang>
+			<Lang xml:lang="en">Item-5</Lang>
+		</Item>
+		<Item code="6">
+			<Lang xml:lang="ja">覚醒剤原料</Lang>
+			<Lang xml:lang="en">Item-6</Lang>
+		</Item>
+		<Item code="7">
+			<Lang xml:lang="ja">習慣性医薬品</Lang>
+			<Lang xml:lang="en">Item-7</Lang>
+		</Item>
+		<Item code="8">
+			<Lang xml:lang="ja">特例承認医薬品</Lang>
+			<Lang xml:lang="en">Item-8</Lang>
+		</Item>
+		<Item code="9">
+			<Lang xml:lang="ja">処方箋医薬品</Lang>
+			<Lang xml:lang="en">Item-9</Lang>
+		</Item>
+		<Item code="10">
+			<Lang xml:lang="ja">生物由来製品</Lang>
+			<Lang xml:lang="en">Item-10</Lang>
+		</Item>
+		<Item code="11">
+			<Lang xml:lang="ja">特定生物由来製品</Lang>
+			<Lang xml:lang="en">Item-11</Lang>
+		</Item>
+		<Item code="12">
+			<Lang xml:lang="ja">緊急承認医薬品</Lang>
+			<Lang xml:lang="en">Item-12</Lang>
+		</Item>
+		<Item code="13">
+			<Lang xml:lang="ja">条件付き承認品目</Lang>
+			<Lang xml:lang="en">Item-13</Lang>
+		</Item>
+		<Item code="14">
+			<Lang xml:lang="ja">（一部）条件付き承認品目</Lang>
+			<Lang xml:lang="en">Item-14</Lang>
+		</Item>
+		<Item code="15">
+			<Lang xml:lang="ja">条件付き早期承認品目</Lang>
+			<Lang xml:lang="en">Item-15</Lang>
+		</Item>
+			<Item code="16">
+			<Lang xml:lang="ja">（一部）条件付き早期承認品目</Lang>
+			<Lang xml:lang="en">Item-16</Lang>
+		</Item>
+
+  </RegulatoryClassification>
+	<!-- Labelのtype属性について："edit"は個別編集画面表示用、"preview"はプレビュー画面表示用 -->
+	<Selection>
+		<Item id="1">
+			<Code>1</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">毒薬</Lang>
+				<Lang xml:lang="en">Label-1</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">毒薬</Lang>
+				<Lang xml:lang="en">Label-1</Lang>
+			</Label>
+		</Item>
+		<Item id="2">
+			<Code>2</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">劇薬</Lang>
+				<Lang xml:lang="en">Label-2</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">劇薬</Lang>
+				<Lang xml:lang="en">Label-2</Lang>
+			</Label>
+		</Item>
+		<Item id="3">
+			<Code>3</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">麻薬</Lang>
+				<Lang xml:lang="en">Label-3</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">麻薬</Lang>
+				<Lang xml:lang="en">Label-3</Lang>
+			</Label>
+		</Item>
+		<Item id="4">
+			<Code>4</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">向精神薬(第一種)</Lang>
+				<Lang xml:lang="en">Label-4</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">向精神薬(第一種)</Lang>
+				<Lang xml:lang="en">Label-4</Lang>
+			</Label>
+		</Item>
+		<Item id="5">
+			<Code>5</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">向精神薬(第二種)</Lang>
+				<Lang xml:lang="en">Label-5</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">向精神薬(第二種)</Lang>
+				<Lang xml:lang="en">Label-5</Lang>
+			</Label>
+		</Item>
+		<Item id="6">
+			<Code>6</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">向精神薬(第三種)</Lang>
+				<Lang xml:lang="en">Label-6</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">向精神薬(第三種)</Lang>
+				<Lang xml:lang="en">Label-6</Lang>
+			</Label>
+		</Item>
+		<Item id="7">
+			<Code>7</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">覚醒剤</Lang>
+				<Lang xml:lang="en">Label-7</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">覚醒剤</Lang>
+				<Lang xml:lang="en">Label-7</Lang>
+			</Label>
+		</Item>
+		<Item id="8">
+			<Code>8</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">覚醒剤原料</Lang>
+				<Lang xml:lang="en">Label-8</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">覚醒剤原料</Lang>
+				<Lang xml:lang="en">Label-8</Lang>
+			</Label>
+		</Item>
+		<Item id="9">
+			<Code>9</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">習慣性医薬品</Lang>
+				<Lang xml:lang="en">Label-9</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">習慣性医薬品</Lang>
+				<Lang xml:lang="en">Label-9</Lang>
+			</Label>
+			<Comment>
+				<Lang xml:lang="ja">注意―習慣性あり</Lang>
+				<Lang xml:lang="en">Comment-9</Lang>
+			</Comment>
+		</Item>
+		<Item id="10">
+			<Code>10</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">特例承認医薬品</Lang>
+				<Lang xml:lang="en">Label-10</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">特例承認医薬品</Lang>
+				<Lang xml:lang="en">Label-10</Lang>
+			</Label>
+			<Comment>
+				<Lang xml:lang="ja">注意―特例承認医薬品</Lang>
+				<Lang xml:lang="en">Comment-10</Lang>
+			</Comment>
+			<Emphasis>true</Emphasis>
+		</Item>
+		<Item id="11">
+			<Code>11</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">処方箋医薬品（医師）</Lang>
+				<Lang xml:lang="en">Label-11</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">処方箋医薬品</Lang>
+				<Lang xml:lang="en">Label-11</Lang>
+			</Label>
+			<Comment>
+				<Lang xml:lang="ja">注意―医師の処方箋により使用すること</Lang>
+				<Lang xml:lang="en">Comment-11</Lang>
+			</Comment>
+		</Item>
+		<Item id="12">
+			<Code>12</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">処方箋医薬品（医師等）</Lang>
+				<Lang xml:lang="en">Label-12</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">処方箋医薬品</Lang>
+				<Lang xml:lang="en">Label-12</Lang>
+			</Label>
+			<Comment>
+				<Lang xml:lang="ja">注意―医師等の処方箋により使用すること</Lang>
+				<Lang xml:lang="en">Comment-12</Lang>
+			</Comment>
+		</Item>
+		<Item id="13">
+			<Code>13</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">生物由来製品</Lang>
+				<Lang xml:lang="en">Label-13</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">生物由来製品</Lang>
+				<Lang xml:lang="en">Label-13</Lang>
+			</Label>
+		</Item>
+		<Item id="14">
+			<Code>14</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">特定生物由来製品</Lang>
+				<Lang xml:lang="en">Label-14</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">特定生物由来製品</Lang>
+				<Lang xml:lang="en">Label-14</Lang>
+			</Label>
+		</Item>
+		<Item id="15">
+			<Code>15</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">緊急承認医薬品</Lang>
+				<Lang xml:lang="en">Label-15</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">緊急承認医薬品</Lang>
+				<Lang xml:lang="en">Label-15</Lang>
+			</Label>
+			<Comment>
+				<Lang xml:lang="ja">注意―緊急承認医薬品</Lang>
+				<Lang xml:lang="en">Comment-15</Lang>
+			</Comment>
+			<Emphasis>true</Emphasis>
+		</Item>
+		<Item id="16">
+			<Code>16</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">条件付き承認品目</Lang>
+				<Lang xml:lang="en">Label-16</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">条件付き承認品目</Lang>
+				<Lang xml:lang="en">Label-16</Lang>
+			</Label>
+		</Item>
+		<Item id="17">
+			<Code>17</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">（一部）条件付き承認品目</Lang>
+				<Lang xml:lang="en">Label-17</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">（一部）条件付き承認品目</Lang>
+				<Lang xml:lang="en">Label-17</Lang>
+			</Label>
+		</Item>
+		<Item id="18">
+			<Code>18</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">条件付き早期承認品目</Lang>
+				<Lang xml:lang="en">Label-18</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">条件付き早期承認品目</Lang>
+				<Lang xml:lang="en">Label-18</Lang>
+			</Label>
+			</Item>
+		<Item id="19">
+			<Code>19</Code>
+			<Label type="edit">
+				<Lang xml:lang="ja">（一部）条件付き早期承認品目</Lang>
+				<Lang xml:lang="en">Label-19</Lang>
+			</Label>
+			<Label type="preview">
+				<Lang xml:lang="ja">（一部）条件付き早期承認品目</Lang>
+				<Lang xml:lang="en">Label-19</Lang>
+			</Label>
+		</Item>
+	</Selection>
+</RegulatoryClassifications>

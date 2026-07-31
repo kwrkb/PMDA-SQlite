@@ -1,0 +1,324 @@
+<?xml version="1.0" encoding="utf-8"?>
+<label>
+	<DrugType>添付文書形式</DrugType>
+	<DrugTypeItems>
+		<Item id="Medicine">医療用医薬品</Item>
+		<Item id="Vaccine">ワクチン類及びトキソイド類</Item>
+		<Item id="Antitoxin">抗毒素及び検査に用いる生物学的製剤、膀注用BCG</Item>
+		<Item id="BloodProduct">全血製剤、血液成分製剤</Item>
+	</DrugTypeItems>
+
+	<PackageInsertNo>添付文書番号</PackageInsertNo>
+	<CompanyIdentifier>企業コード</CompanyIdentifier>
+
+	<DateOfPreparationOrRevision>作成又は改訂年月</DateOfPreparationOrRevision>
+	<PreparationOrRevision>改訂情報</PreparationOrRevision>
+	<YearMonth>年月</YearMonth>
+	<Version>版数</Version>
+	<ReasonForRevision>改訂理由</ReasonForRevision>
+	
+	<Sccj>日本標準商品分類番号</Sccj>
+	<SccjNo>日本標準商品分類番号</SccjNo>
+	
+	<TherapeuticClassification>薬効分類名</TherapeuticClassification>
+	
+	<ApprovalEtc>承認等</ApprovalEtc>
+	
+	<ApprovalBrandName>販売名</ApprovalBrandName>
+	
+	<BrandCode>販売名コード</BrandCode>
+	<YJCode>YJコード</YJCode>
+	<Code>一般コード</Code>
+
+	<CodeName>コード名称</CodeName>
+	<CodeVersion>コード体系のバージョン</CodeVersion>
+	<CodeValue>コード値</CodeValue>
+	
+	<TrademarkInEnglish>販売名英語表記</TrademarkInEnglish>
+	
+	<BrandNameInHiragana>販売名ひらがな</BrandNameInHiragana>
+	
+	<ApprovalAndLicenseNo>承認番号等</ApprovalAndLicenseNo>
+	<ApprovalNo>承認番号</ApprovalNo>
+	<LicenseNo>許可番号</LicenseNo>
+	
+	<StartingDateOfMarketing>販売開始年月</StartingDateOfMarketing>
+	
+	<Storage>貯法・有効期間</Storage>
+	<StorageMethod>貯法</StorageMethod>
+	<ShelfLife>有効期間</ShelfLife>
+	
+	<StandardName>基準名</StandardName>
+	<StandardNameCategoryCode>基準名種別</StandardNameCategoryCode>
+	<StandardNameDetail>基準名</StandardNameDetail>
+  <OtherStandardName>その他の基準名</OtherStandardName>
+	<OtherStandardNameCategory>その他の基準名種別</OtherStandardNameCategory>
+	<StandardNameDetail>基準名</StandardNameDetail>
+	
+	<RegulatoryClassification>規制区分</RegulatoryClassification>
+	<RegulatoryClassificationCode>規制区分コード</RegulatoryClassificationCode>
+	<RegulatoryClassificationComment>規制区分の注釈</RegulatoryClassificationComment>
+	<OtherRegulatoryClassification>その他の規制区分</OtherRegulatoryClassification>
+	
+	<SupplementaryInformationOfProduct>製品の補足情報</SupplementaryInformationOfProduct>
+	
+	<GenericName>一般的名称</GenericName>
+	
+	<SupplementaryInformaitonOfVaccineStrain>ワクチン株の補足情報</SupplementaryInformaitonOfVaccineStrain>
+	
+	<SpeciallyDescribedItems>特殊記載項目（※  当該欄は行政が指示した内容のみ記載すること）</SpeciallyDescribedItems>
+	
+	<Warnings>警告</Warnings>
+	
+	<ContraIndications>
+		<Item id="Medicine">禁忌（次の患者には投与しないこと）</Item>
+		<Item id="Vaccine">接種不適当者（予防接種を受けることが適当でない者）</Item>
+		<Item id="Antitoxin">禁忌（次の患者には投与しないこと）</Item>
+		<Item id="BloodProduct">禁忌（次の患者には投与しないこと）</Item>
+	</ContraIndications>
+	
+	<CompositionAndProperty>
+		<Item id="Medicine">組成・性状</Item>
+		<Item id="Vaccine">製法の概要及び組成・性状</Item>
+		<Item id="Antitoxin">製法の概要及び組成・性状</Item>
+		<Item id="BloodProduct">組成・性状</Item>
+	</CompositionAndProperty>
+	
+	<OverviewOfRecipe>製法の概要</OverviewOfRecipe>
+	
+	<Composition>組成</Composition>
+	<OverviewOfComposition>組成の概要</OverviewOfComposition>
+	<ConstituentUnits>構成</ConstituentUnits>
+	<ContainedAmount>有効成分</ContainedAmount>
+	<ActiveIngredient>有効成分</ActiveIngredient>
+	<ActiveIngredientName>有効成分</ActiveIngredientName>
+	<ValueAndUnit>含有量</ValueAndUnit>
+	<Additives>添加剤</Additives>
+	<ListOfAdditives>添加剤リスト</ListOfAdditives>
+	<IndividualAdditive>個別添加剤</IndividualAdditive>
+	<OtherComposition>組成の自由項目</OtherComposition>	
+	<CategoryName>自由項目の分類名</CategoryName>
+	<ContentTitle>タイトル</ContentTitle>
+	<ContentDetail>内容</ContentDetail>
+	<CompositionAndPropertyTblTitle>表のタイトル</CompositionAndPropertyTblTitle>
+	<CompositionAndPropertyTblFoot>表のフッタ</CompositionAndPropertyTblFoot>
+	<CompositionCommentsForConstituentUnits>組成の構成に関する注釈</CompositionCommentsForConstituentUnits>
+	<CompositionComments>組成に関する注釈</CompositionComments>
+	
+	<Property>製剤の性状</Property>
+	<OverviewOfProperty>製剤の性状の概要</OverviewOfProperty>
+	<Formulation>剤形</Formulation>
+	<ColorTone>色調</ColorTone>
+	<Shape>外形</Shape>
+	<ShapeFront>表面</ShapeFront>
+	<ShapeBack>裏面</ShapeBack>
+	<ShapeSide>側面</ShapeSide>
+	<Size>大きさ</Size>
+	<SizeDiameter>直径</SizeDiameter>
+	<SizeLongDiameter>長径</SizeLongDiameter>
+	<SizeShortDiameter>短径</SizeShortDiameter>
+	<SizeTotalLength>全長</SizeTotalLength>
+	<SizeThickness>厚さ</SizeThickness>
+	<SizeArea>面積</SizeArea>
+	<SizeNumber>号数</SizeNumber>
+	<Weight>質量</Weight>
+	<IdCode>識別コード</IdCode>
+	<pH>pH</pH>
+	<OsmoticRatio>浸透圧比</OsmoticRatio>
+	<Odor>におい</Odor>
+	<Taste>味</Taste>
+	<Note>注記</Note>
+	<OtherProperty>製剤の性状の自由項目</OtherProperty>
+	
+	<PropertyCommentsForConstituentUnits>性状の構成に関する注釈</PropertyCommentsForConstituentUnits>
+	
+	<IndicationsOrEfficacy>
+		<Item id="1">効能又は効果</Item>
+		<Item id="2">効能効果</Item>
+		<Item id="3">効能・効果</Item>
+	</IndicationsOrEfficacy>
+	<EfficacyRelatedPrecautions>
+		<Item id="1">効能又は効果に関連する注意</Item>
+		<Item id="2">効能効果に関連する注意</Item>
+		<Item id="3">効能・効果に関連する注意</Item>
+	</EfficacyRelatedPrecautions>
+	<InfoDoseAdmin>
+		<Item id="1">用法及び用量</Item>
+		<Item id="2">用法用量</Item>
+		<Item id="3">用法・用量</Item>
+	</InfoDoseAdmin>
+	<OtherRelatedMatters>
+		<Item id="1">用法及び用量に関する説明</Item>
+		<Item id="2">用法用量に関する説明</Item>
+		<Item id="3">用法・用量に関する説明</Item>
+	</OtherRelatedMatters>
+	<InfoPrecautionsDosage>
+		<Item id="1">用法及び用量に関連する注意</Item>
+		<Item id="2">用法用量に関連する注意</Item>
+		<Item id="3">用法・用量に関連する注意</Item>
+	</InfoPrecautionsDosage>
+	
+	<ImportantPrecautions>重要な基本的注意</ImportantPrecautions>
+	
+	<UseInSpecificPopulations>
+		<Item id="Medicine">特定の背景を有する患者に関する注意</Item>
+		<Item id="Vaccine">特定の背景を有する者に関する注意</Item>
+		<Item id="Antitoxin">特定の背景を有する患者に関する注意</Item>
+		<Item id="BloodProduct">特定の背景を有する患者に関する注意</Item>
+	</UseInSpecificPopulations>
+	<UseInPatientsWithComplicationsOrHistoryOfDiseasesEtc>
+		<Item id="Medicine">合併症・既往歴等のある患者</Item>
+		<Item id="Vaccine">接種要注意者（接種の判断を行うに際し、注意を要する者）</Item>
+		<Item id="Antitoxin">合併症・既往歴等のある患者</Item>
+		<Item id="BloodProduct">合併症・既往歴等のある患者</Item>
+	</UseInPatientsWithComplicationsOrHistoryOfDiseasesEtc>
+	<PatientsWithRenalImpairment>
+		<Item id="Medicine">腎機能障害患者</Item>
+		<Item id="Vaccine">腎機能障害を有する者</Item>
+		<Item id="Antitoxin">腎機能障害患者</Item>
+		<Item id="BloodProduct">腎機能障害患者</Item>
+	</PatientsWithRenalImpairment>
+	<PatientsWithHepaticImpairment>
+		<Item id="Medicine">肝機能障害患者</Item>
+		<Item id="Vaccine">肝機能障害を有する者</Item>
+		<Item id="Antitoxin">肝機能障害患者</Item>
+		<Item id="BloodProduct">肝機能障害患者</Item>
+	</PatientsWithHepaticImpairment>
+	<MalesAndFemalesOfReproductivePotential>生殖能を有する者</MalesAndFemalesOfReproductivePotential>
+	<UseInPregnant>妊婦</UseInPregnant>
+	<UseInNursing>授乳婦</UseInNursing>
+	<PediatricUse>小児等</PediatricUse>
+	<UseInTheElderly>高齢者</UseInTheElderly>
+	
+	<Interactions>相互作用</Interactions>
+	<SummaryOfCombination>相互作用の概略</SummaryOfCombination>
+	
+	<ContraIndicatedCombinations>併用禁忌(併用しないこと)</ContraIndicatedCombinations>
+	<ContraIndication>併用禁忌</ContraIndication>
+	<ExplanatoryNotesForContraIndication>併用禁忌に関する注釈</ExplanatoryNotesForContraIndication>
+	
+	<PrecautionsForCombinations>併用注意(併用に注意すること)</PrecautionsForCombinations>
+	<PrecautionsForCombi>併用注意</PrecautionsForCombi>
+	<ExplanatoryNotesForPrecautions>併用注意に関する注釈</ExplanatoryNotesForPrecautions>
+	
+	<Names>薬剤名等</Names>
+	<ClinSymptomsAndMeasures>臨床症状・措置方法</ClinSymptomsAndMeasures>
+	<MechanismAndRiskFactors>機序・危険因子</MechanismAndRiskFactors>
+	
+	<AdverseEvents>
+		<Item id="Medicine">副作用</Item>
+		<Item id="Vaccine">副反応</Item>
+		<Item id="Antitoxin">副作用</Item>
+		<Item id="BloodProduct">副作用及び感染症</Item>
+	</AdverseEvents>
+	<CommonPrecautionsForAdverse>
+		<Item id="Medicine">副作用の共通の注意</Item>
+		<Item id="Vaccine">副反応の共通の注意</Item>
+		<Item id="Antitoxin">副作用の共通の注意</Item>
+		<Item id="BloodProduct">副作用の共通の注意</Item>
+	</CommonPrecautionsForAdverse>
+	<SeriousAdverseEvents>
+		<Item id="Medicine">重大な副作用</Item>
+		<Item id="Vaccine">重大な副反応</Item>
+		<Item id="Antitoxin">重大な副作用</Item>
+		<Item id="BloodProduct">重大な副作用及び感染症</Item>
+	</SeriousAdverseEvents>
+	<OtherAdverseEvents>
+		<Item id="Medicine">その他の副作用</Item>
+		<Item id="Vaccine">その他の副反応</Item>
+		<Item id="Antitoxin">その他の副作用</Item>
+		<Item id="BloodProduct">その他の副作用</Item>
+	</OtherAdverseEvents>
+	<CategoryDefinition>その他の副作用の種類の定義</CategoryDefinition>
+	<Category>その他の副作用の種類</Category>
+	<FrequencyDefinition>その他の副作用の頻度の定義</FrequencyDefinition>
+	<Frequency>その他の副作用の頻度</Frequency>
+	<AdverseReactions>その他の副作用の説明群</AdverseReactions>
+	<AdverseReactionDescription>その他の副作用の説明</AdverseReactionDescription>
+	<ExplanatoryNotesForOtherAdverse>その他の副作用の注釈</ExplanatoryNotesForOtherAdverse>
+	
+	<CommonExplanatoryNotesForAdverse>副作用の共通の注釈
+		<Item id="Medicine">副作用の共通の注釈</Item>
+		<Item id="Vaccine">副反応の共通の注釈</Item>
+		<Item id="Antitoxin">副作用の共通の注釈</Item>
+		<Item id="BloodProduct">副作用の共通の注釈</Item>
+	</CommonExplanatoryNotesForAdverse>
+	
+	<InfluenceOnLaboratoryValues>臨床検査結果に及ぼす影響</InfluenceOnLaboratoryValues>
+	
+	<OverDosage>
+		<Item id="Medicine">過量投与</Item>
+		<Item id="Vaccine">過量接種</Item>
+		<Item id="Antitoxin">過量投与</Item>
+		<Item id="BloodProduct">過量投与</Item>
+	</OverDosage>
+	
+	<PrecautionsForApplication>適用上の注意</PrecautionsForApplication>
+	
+	<OtherPrecautions>その他の注意</OtherPrecautions>
+	<InformationBasedOnClinicalUse>臨床使用に基づく情報</InformationBasedOnClinicalUse>
+	<InformationBasedOnNonclinicalStudies>非臨床試験に基づく情報</InformationBasedOnNonclinicalStudies>
+	
+	<Pharmacokinetics>薬物動態</Pharmacokinetics>
+	<BloodLevel>血中濃度</BloodLevel>
+	<Absorption>吸収</Absorption>
+	<Distribution>分布</Distribution>
+	<Metabolism>代謝</Metabolism>
+	<Excretion>排泄</Excretion>
+	<SpecificPopulation>
+		<Item id="Medicine">特定の背景を有する患者</Item>
+		<Item id="Vaccine">特定の背景を有する者</Item>
+		<Item id="Antitoxin">特定の背景を有する患者</Item>
+		<Item id="BloodProduct">特定の背景を有する患者</Item>
+	</SpecificPopulation>
+	<DrugAndDrugInteractions>薬物相互作用</DrugAndDrugInteractions>
+	<PharmacokineticsEtc>その他</PharmacokineticsEtc>
+	
+	<ResultsOfClinicalTrials>臨床成績</ResultsOfClinicalTrials>
+	<EfficacyAndSafety>有効性及び安全性に関する試験</EfficacyAndSafety>
+	<PostMarketingSurveylancesEtc>製造販売後調査等</PostMarketingSurveylancesEtc>
+	<ResultsOfClinicalTrialsEtc>その他</ResultsOfClinicalTrialsEtc>
+	
+	<EfficacyPharmacology>薬効薬理</EfficacyPharmacology>
+	<MechanismOfAction>作用機序</MechanismOfAction>
+	<MeasurementMethod>測定法</MeasurementMethod>
+	
+	<PhyschemOfActIngredients>有効成分に関する理化学的知見</PhyschemOfActIngredients>
+	<PhyschemOfActIngredientsSectionTitle>有効成分に関する理化学的知見のセクションのタイトル</PhyschemOfActIngredientsSectionTitle>
+	<GeneralName>一般的名称</GeneralName>
+	<ChemicalName>化学名</ChemicalName>
+	<MolecularFormula>分子式</MolecularFormula>
+	<MolecularWeight>分子量</MolecularWeight>
+	<DescriptionOfActiveIngredients>性状</DescriptionOfActiveIngredients>
+	<StructuralFormula>化学構造式</StructuralFormula>
+	<MeltingPoint>融点</MeltingPoint>
+	<PartitionCoefficient>分配係数</PartitionCoefficient>
+	<Nature>本質</Nature>
+	<NucleophysicalProperties>核物理学的特性</NucleophysicalProperties>
+	
+	<PrecautionsForHandling>取扱い上の注意</PrecautionsForHandling>
+	<ConditionsOfApproval>承認条件</ConditionsOfApproval>
+	<Package>包装</Package>
+	<MainLiterature>主要文献</MainLiterature>
+	<AddresseeOfLiteratureRequest>文献請求先及び問い合わせ先</AddresseeOfLiteratureRequest>
+	<AddresseeOfInquiry>問い合わせ先</AddresseeOfInquiry>
+	<AttentionOfInsurance>保険給付上の注意</AttentionOfInsurance>
+	<ContentOfAttentionOfInsurance>保険給付上の注意</ContentOfAttentionOfInsurance>
+	<NameAddressManufact>製造販売業者等</NameAddressManufact>
+	<Manufacturer>製造販売業者等</Manufacturer>
+	<TypeOfIndustry>製造販売業者等の業務の種別</TypeOfIndustry>
+	<Name>氏名又は名称</Name>
+	<Address>住所</Address>
+	<ContactInformation>連絡先</ContactInformation>
+	
+	<ReferenceInformation>参考情報</ReferenceInformation>
+	
+	<OtherInformation>その他</OtherInformation>
+	<Instructions>指示文</Instructions>
+	<SeriousAdverse>重大な副作用</SeriousAdverse>
+	<ExplanatoryNotesForSeriousAdverse>重大な副作用の注釈</ExplanatoryNotesForSeriousAdverse>
+	<OtherAdverse>その他の副作用</OtherAdverse>
+	
+	<Header>見出し</Header>
+	
+</label>
