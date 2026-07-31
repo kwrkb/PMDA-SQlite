@@ -9,10 +9,35 @@ PMDA公式XSLが出すタグ語彙は限定的（div/p/span/a/ol/ul/li/table/img
 import re
 
 
+# ブロックを作らず、周囲のテキストと同じ行に流し込むタグ。
+# img もここに含める: PMDA公式XSLは InlineGraphic を <p> や表セルの内側に
+# 直接 <img> として出力する（preview-include.xsl の InlineGraphic 分岐）ため、
+# ブロック要素として別扱いすると本文中の用法図などが落ちる。
+INLINE_TAGS = frozenset((
+    "a", "span", "sup", "sub", "br", "em", "b", "i", "u", "strong", "font", "img",
+))
+
+
+def _inline_parts(el):
+    """インライン要素配下のテキスト片を出現順に列挙する。"""
+    if el.tag == "img":
+        # img はテキストを持たないので itertext() では消える。Markdown画像記法にする。
+        yield f"![図]({_fix_img_src(el.get('src', ''))})"
+        return
+
+    if el.text:
+        yield el.text
+    for child in el:
+        if not isinstance(child.tag, str):
+            continue  # コメント/PIノード
+        yield from _inline_parts(child)
+        if child.tail:
+            yield child.tail
+
+
 def _clean_inline_text(el) -> str:
-    """要素配下の全テキストを連結し、連続空白を1つにまとめる。"""
-    text = "".join(el.itertext())
-    return re.sub(r"\s+", " ", text).strip()
+    """要素配下をインラインMarkdownとして1行に平坦化し、連続空白を1つにまとめる。"""
+    return re.sub(r"\s+", " ", "".join(_inline_parts(el))).strip()
 
 
 def _table_has_span(table_el) -> bool:
@@ -102,23 +127,81 @@ def convert_section_body(body_el) -> str:
                     parts.append(md)
             return
 
-        if tag == "img":
-            src = _fix_img_src(node.get("src", ""))
-            parts.append(f"![図]({src})")
+        if tag in INLINE_TAGS:
+            text = _clean_inline_text(node)
+            if text:
+                parts.append(text)
             return
-
-        if tag in ("sup", "sub", "a", "span", "br", "em"):
-            return  # 親コンテナのtext/tail経由でテキストに含まれる想定。単独処理は不要
 
         # それ以外(div等のコンテナ)は直下のテキストと子要素を出現順に処理する。
         # <div>次の副作用が…<a>...</a>…</div> のように <p> で囲まれない
         # 直下テキストがあるケースがあるため、node.text / child.tail も拾う。
-        if node.text and node.text.strip():
-            parts.append(re.sub(r"\s+", " ", node.text).strip())
+        # 連続するインライン要素はバッファに溜め、ブロック要素に当たった時点で
+        # 1つのパラグラフとして確定させる（文の途中で改行されるのを防ぐ）。
+        buf = []
+
+        def flush():
+            if buf:
+                text = re.sub(r"\s+", " ", "".join(buf)).strip()
+                if text:
+                    parts.append(text)
+                buf.clear()
+
+        if node.text:
+            buf.append(node.text)
         for child in node:
-            walk(child)
-            if child.tag in ("sup", "sub", "a", "span", "br", "em") and child.tail and child.tail.strip():
-                parts.append(re.sub(r"\s+", " ", child.tail).strip())
+            if not isinstance(child.tag, str):
+                continue  # コメント/PIノード
+            if child.tag in INLINE_TAGS:
+                buf.extend(_inline_parts(child))
+            else:
+                flush()
+                walk(child)
+            if child.tail:
+                buf.append(child.tail)
+        flush()
 
     walk(body_el)
     return "\n\n".join(p for p in parts if p)
+
+
+def _run_tests():
+    from lxml import html
+
+    def md(fragment: str) -> str:
+        return convert_section_body(html.fromstring(fragment))
+
+    # <p> 内のインライン画像（XSLは InlineGraphic を <p> の中に直接出力する）
+    assert md('<div class="level-1"><p>用法は<img src="figures/a.gif"/>のとおり。</p></div>') \
+        == "用法は![図](a.gif)のとおり。"
+
+    # 表セル内のインライン画像
+    assert md('<div class="level-1"><table><tr><th>構造</th></tr>'
+              '<tr><td><img src="figures/b.jpg"/></td></tr></table></div>') \
+        == "| 構造 |\n|---|\n| ![図](b.jpg) |"
+
+    # リスト項目内のインライン画像
+    assert md('<div class="level-1"><ul><li>図: <img src="figures/c.gif"/></li></ul></div>') \
+        == "- 図: ![図](c.gif)"
+
+    # HeaderRef はテキスト解決済みで渡ってくる（render_xsl.resolve_header_refs）。
+    # 参照テキストが本文から欠落しないこと。
+    assert md('<div class="level-1"><p>出血のおそれがある。[<a class="HeaderRef" '
+              'href="#HDR_X">［10.2 参照］</a>]</p></div>') \
+        == "出血のおそれがある。[［10.2 参照］]"
+
+    # <p>で囲まれないコンテナ直下テキストは、インライン要素をまたいで1文にまとまる
+    assert md('<div class="level-1">次の副作用が<a class="HeaderRef" href="#HDR_Y">'
+              '［11.1 参照］</a>報告されている。</div>') \
+        == "次の副作用が［11.1 参照］報告されている。"
+
+    # ネストされた下位セクションには踏み込まない（別 sections 行として処理されるため）
+    assert md('<div class="level-1"><p>親の本文</p>'
+              '<div class="section" id="HDR_Z"><h3>子見出し</h3><p>子の本文</p></div></div>') \
+        == "親の本文"
+
+    print("回帰テストOK: html_to_markdown")
+
+
+if __name__ == "__main__":
+    _run_tests()

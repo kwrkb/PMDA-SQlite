@@ -42,9 +42,17 @@ Multiple products (e.g., "Drug X 10mg tablet", "Drug X 50mg tablet") share the s
 $env:PMDA_RAW_DIR = "C:\path\to\pmda_all_sgml_xml_YYYYMMDD_parent_dir"  # if not under data/PMDAraw/
 $env:PYTHONPATH = "src"
 .venv\Scripts\python.exe src\db_setup.py
+.venv\Scripts\python.exe src\db_setup.py --recreate  # Drop + recreate (required over a pre-sections DB)
 .venv\Scripts\python.exe src\xml_to_db.py 10      # Test load (10 directories)
 .venv\Scripts\python.exe src\xml_to_db.py          # Full load (~25 min, parallelized)
 ```
+
+`db_setup.py` refuses to run over a database built by the pre-`sections`
+schema and exits 1 — `CREATE TABLE IF NOT EXISTS` never alters an existing
+table, so the old `medicines` (no `UNIQUE(package_insert_no)`, 35 body
+columns) would survive and `xml_to_db.py` would then treat every row as
+already-loaded (`is_new=False`) and write **zero** `sections` while reporting
+success. Pass `--recreate` to drop and rebuild.
 
 The loader is CPU-bound (XSLT rendering is superlinear in document size — see
 `docs/XSL_SPIKE.md`) and uses `multiprocessing` across `cpu_count() - 1` workers.
@@ -54,7 +62,9 @@ DB writes happen serially in the parent process.
 
 ```bash
 python src/parse_product_name.py   # Run product name parser tests
-python src/render_xsl.py <xml>     # Regression-test float rounding + inspect one file's sections
+python src/html_to_markdown.py     # Inline-image / cross-reference conversion tests
+python src/render_xsl.py           # Regression-test float rounding + HeaderRef resolution
+python src/render_xsl.py <xml>     # ...and inspect one file's sections
 ```
 
 ### Validation
@@ -127,12 +137,22 @@ Full investigation: `docs/XSL_SPIKE.md`.
    artifact in the stylesheet's own arithmetic). `fix_float_section_no()`
    rounds these — **must round, not truncate** (`9.199999999999999` → `9.2`,
    not `9.1`).
-2. **Empty cross-reference links leave orphan commas**: `<a class="HeaderRef">`
-   elements are empty (meant to be JS-tooltip-ified) but a literal `,` often
-   sits as their tail text, producing artifacts like `…おそれがある。],,` if
-   naively converted. `strip_header_refs()` removes the element **and its
-   tail** together.
-3. **XSLT transform time is superlinear in document size** (17KB→18ms,
+2. **Cross-reference text is filled in by JavaScript, not by the XSLT**:
+   `<a class="HeaderRef" href="#HDR_XXX">` is emitted empty; the visible
+   `［10.2 参照］` is inserted at page load by `vendor/pmda-styles/js/preview.js`,
+   which looks the target up in the hidden `<div id="Header-data">` map (falling
+   back to `（見出し参照切れ）`). The DB pipeline runs no JavaScript, so
+   `resolve_header_refs()` reproduces that lookup. **Do not delete the anchor
+   and its tail** — the tail is ordinary body text (`。用法の図…`), not just a
+   separator comma, so removing it silently drops sentences as well as
+   medically relevant cross-references.
+3. **Inline images live inside `<p>` and table cells**: the stylesheet renders
+   `InlineGraphic` as an `<img>` in the middle of a paragraph. `itertext()`
+   drops it (an `img` carries no text), so all inline flattening goes through
+   `_inline_parts()` / `_clean_inline_text()`, which substitutes
+   `![図](<file>)` in place. Any new branch that assembles inline text must use
+   them rather than `itertext()`.
+4. **XSLT transform time is superlinear in document size** (17KB→18ms,
    311KB→10s in spike measurements; root cause is `//` and `@id=$id` lookups
    inside the vendor stylesheet). This is why the loader parallelizes with
    `multiprocessing` instead of running serially.
@@ -242,10 +262,13 @@ This database is for informational purposes only and must not be used for medica
 
 The database is a point-in-time snapshot. To rebuild from scratch:
 ```bash
-rm data/pmda.sqlite
-PYTHONPATH=src python src/db_setup.py
+PYTHONPATH=src python src/db_setup.py --recreate   # or: rm data/pmda.sqlite && ... db_setup.py
 PYTHONPATH=src python src/xml_to_db.py
 ```
+Reloading without recreating produces no new `sections`: `insert_medicine()`
+returns `is_new=False` for any `package_insert_no` already present, and
+`store_result()` skips `interactions`/`sections` in that case (they carry no
+UNIQUE constraint, so re-inserting would duplicate rows).
 
 ### NULL Handling
 

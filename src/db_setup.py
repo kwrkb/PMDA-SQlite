@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import sys
 from datetime import datetime
 
 from config import DB_PATH
@@ -44,8 +45,73 @@ LEGACY_COLUMN_MAP = {
 }
 
 
-def setup_database():
-    """データベースとテーブルを作成する"""
+# 旧スキーマの medicines だけが持つ本文カラム（現行では sections に正規化済み）
+LEGACY_MEDICINE_COLUMN = "indications"
+
+# 作り直し(--recreate)で破棄するオブジェクト。medicines_fts は旧スキーマの
+# 全文検索テーブル（現行は sections_fts）。
+DROP_ORDER = [
+    ("VIEW", "medicines_legacy"),
+    ("TABLE", "sections_fts"),
+    ("TABLE", "medicines_fts"),
+    ("TABLE", "sections"),
+    ("TABLE", "interactions"),
+    ("TABLE", "specifications"),
+    ("TABLE", "medicines"),
+]
+
+
+def _has_unique_index(cursor, table: str, column: str) -> bool:
+    """table の column 単独に UNIQUE 制約/インデックスがあるか。
+
+    CREATE TABLE 内の UNIQUE 制約は sqlite_autoindex_* として index_list に現れる。
+    """
+    for row in cursor.execute(f"PRAGMA index_list({table})"):
+        _seq, name, unique = row[0], row[1], row[2]
+        if not unique:
+            continue
+        cols = [r[2] for r in cursor.execute(f"PRAGMA index_info('{name}')")]
+        if cols == [column]:
+            return True
+    return False
+
+
+def detect_schema_state(cursor) -> str:
+    """medicines テーブルのスキーマ世代を判定する。'absent' | 'legacy' | 'current'。
+
+    CREATE TABLE IF NOT EXISTS は既存テーブルの定義を一切変更しないため、
+    旧DBの上でセットアップしても medicines は旧定義（package_insert_no に
+    UNIQUE無し・本文35カラム）のまま残る。その状態で xml_to_db.py を走らせると
+    既存 package_insert_no が is_new=False と判定され sections が1行も
+    入らないまま「成功」と表示されるので、ここで検出する必要がある。
+    """
+    exists = cursor.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='medicines'"
+    ).fetchone()
+    if not exists:
+        return "absent"
+
+    columns = {row[1] for row in cursor.execute("PRAGMA table_info(medicines)")}
+    if LEGACY_MEDICINE_COLUMN in columns:
+        return "legacy"
+    if not _has_unique_index(cursor, "medicines", "package_insert_no"):
+        return "legacy"
+    return "current"
+
+
+def _drop_all(cursor):
+    for kind, name in DROP_ORDER:
+        cursor.execute(f"DROP {kind} IF EXISTS {name}")
+    print("既存のテーブル/VIEWを削除しました。")
+
+
+def setup_database(recreate: bool = False):
+    """データベースとテーブルを作成する
+
+    Args:
+        recreate: True なら既存のテーブル/VIEWを削除してから作り直す。
+                  旧スキーマのDBを検出した場合はこれを指定しない限り中断する。
+    """
 
     # ディレクトリの存在確認
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -54,6 +120,24 @@ def setup_database():
     cursor = conn.cursor()
 
     print(f"Setting up database at {DB_PATH}...")
+
+    state = detect_schema_state(cursor)
+    if recreate:
+        _drop_all(cursor)
+        conn.commit()
+    elif state == "legacy":
+        conn.close()
+        print()
+        print("エラー: 旧スキーマのデータベースが存在します。")
+        print("  現行スキーマは medicines を識別情報のみに絞り、本文を sections へ正規化し、")
+        print("  package_insert_no を UNIQUE にしています。CREATE TABLE IF NOT EXISTS は")
+        print("  既存テーブルの定義を変更しないため、このまま続けると xml_to_db.py が")
+        print("  既存行を再利用して sections を1行も作らないまま完了してしまいます。")
+        print()
+        print("  作り直す場合:")
+        print("    python src/db_setup.py --recreate     # 既存データを破棄して再作成")
+        print(f"  DBを残したい場合は {DB_PATH} を退避してから再実行してください。")
+        sys.exit(1)
 
     # 1. medicines テーブル（添付文書の識別情報・メタデータのみ）
     #    本文は sections テーブルに正規化して格納する（XSL_SPIKE.md 参照）。
@@ -232,4 +316,10 @@ def rebuild_fts_index():
 
 
 if __name__ == "__main__":
-    setup_database()
+    args = sys.argv[1:]
+    unknown = [a for a in args if a != "--recreate"]
+    if unknown:
+        print(f"エラー: 未知の引数: {' '.join(unknown)}")
+        print("使用例: python src/db_setup.py [--recreate]")
+        sys.exit(1)
+    setup_database(recreate="--recreate" in args)

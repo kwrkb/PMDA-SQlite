@@ -159,13 +159,20 @@ $env:PYTHONPATH = "src"
 .venv\Scripts\python.exe src\xml_to_db.py      # 全件ロード（約25分。XSLT変換を並列実行）
 ```
 
+旧スキーマ（本文を `medicines` の35カラムに持っていた版）のDBが残っている場合、
+`db_setup.py` は上書きせず中断します。`--recreate` を付けると既存データを破棄して
+作り直します。
+
 ## データの更新
 
 月次などでデータ更新する場合:
 1. 新しいXMLデータを `data/PMDAraw/`（または`PMDA_RAW_DIR`指定先）に配置
-2. `rm data/pmda.sqlite`
-3. `PYTHONPATH=src python src/db_setup.py`（スキーマ作成）
-4. `PYTHONPATH=src python src/xml_to_db.py`（データロード）
+2. `PYTHONPATH=src python src/db_setup.py --recreate`（既存DBを破棄してスキーマ再作成）
+3. `PYTHONPATH=src python src/xml_to_db.py`（データロード）
+
+既存DBを残したまま再ロードしても本文は更新されません。`insert_medicine()` は
+既知の `package_insert_no` を `is_new=False` として扱い、`sections` /
+`interactions` の再挿入をスキップするためです（重複行防止）。
 
 ## プロジェクト構造
 
