@@ -25,11 +25,18 @@ import traceback
 from datetime import datetime
 from glob import glob
 from multiprocessing import Pool, cpu_count
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from lxml import etree
 
-from config import DB_PATH, LOG_DIR, PMDA_RAW_DIR, VENDOR_XSL_PATH, get_xml_source_dir
+from config import (
+    DB_PATH,
+    LOG_DIR,
+    PMDA_RAW_DIR,
+    VENDOR_REGCLASS_PATH,
+    VENDOR_XSL_PATH,
+    get_xml_source_dir,
+)
 from db_setup import rebuild_fts_index
 from html_to_markdown import convert_section_body
 from parse_product_name import parse_product_name
@@ -157,15 +164,60 @@ def extract_revision_date(root) -> Optional[str]:
     return None
 
 
-REGULATORY_CODES = {
-    "1": "毒薬",
-    "2": "劇薬",
-    "11": "生物由来製品",
-    "12": "特定生物由来製品",
-    "13": "処方箋医薬品",
-    "14": "要指示医薬品",
-    "15": "要指示医薬品注意",
-}
+# 規制区分コード -> ラベル。
+#
+# ハードコードしていた旧テーブルは公式の対応と食い違っており、腹膜透析液が
+# 「特定生物由来製品」になるなど 5,540件が誤ラベルだった（Issue #22）。
+# 正しいのは 1（毒薬）と 2（劇薬）だけで、11〜15 は2つずれており、
+# 3〜10 と 16〜19 は定義そのものが無く 'コード9' のような placeholder が
+# DBに漏れていた。
+#
+# 出所を推測せず、PMDA公式XSLTが実際に引いているのと同じ場所から読む:
+# preview_ja.xsl:14 が document() で RegulatoryClassification.xml を読み、
+# preview-include.xsl:647 が
+#   $regclass/Selection/Item[@id=$codeNum]/Label[@type='preview']/Lang[@xml:lang='ja']
+# を出力する。vendor を更新すれば対応表も自動で追随する。
+#
+# なお id=11 と id=12 はどちらも「処方箋医薬品」（注記文言だけが違う）。
+# 呼び出し側が重複ラベルを畳むので結果は1つになる。
+
+
+def load_regulatory_codes(path: str = VENDOR_REGCLASS_PATH) -> Dict[str, str]:
+    """vendor の RegulatoryClassification.xml からコード -> ラベルを読む。"""
+    root = etree.parse(path).getroot()
+    codes = {}
+    for item in root.findall("Selection/Item"):
+        code = item.get("id")
+        # ElementPath は xml: 接頭辞を解決できないので xpath() を使う
+        label = item.xpath("Label[@type='preview']/Lang[@xml:lang='ja']")
+        if code and label and (label[0].text or "").strip():
+            codes[code] = label[0].text.strip()
+    if not codes:
+        raise ValueError(f"規制区分の対応表が空です: {path}")
+    return codes
+
+
+_regulatory_codes: Optional[Dict[str, str]] = None
+_unknown_regulatory_codes: Set[str] = set()
+
+
+def regulatory_label(code: str) -> str:
+    """規制区分コードを日本語ラベルにする。未知のコードは警告して placeholder を返す。
+
+    対応表の読み込みは遅延させている。VENDOR_REGCLASS_PATH は相対パスで、
+    import 時点の作業ディレクトリに依存させたくないため（VENDOR_XSL_PATH と同じ扱い）。
+    """
+    global _regulatory_codes
+    if _regulatory_codes is None:
+        _regulatory_codes = load_regulatory_codes()
+    label = _regulatory_codes.get(code)
+    if label:
+        return label
+    if code not in _unknown_regulatory_codes:
+        # 黙って 'コード9' をDBに入れると今回のような取りこぼしに気づけない
+        _unknown_regulatory_codes.add(code)
+        print(f"  ! 未知の規制区分コード: {code}（{VENDOR_REGCLASS_PATH} に定義なし）")
+    return f"コード{code}"
 
 
 def extract_specifications(root) -> List[dict]:
@@ -204,7 +256,7 @@ def extract_specifications(root) -> List[dict]:
                     code_text = _text(code_el)
                     if code_text:
                         code = code_text.strip()
-                        label = REGULATORY_CODES.get(code, f"コード{code}")
+                        label = regulatory_label(code)
                         if label not in codes:
                             codes.append(label)
                 if codes:

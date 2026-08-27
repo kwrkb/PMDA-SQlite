@@ -243,3 +243,73 @@ def test_sections_composite_index_exists(temp_db):
     conn.close()
     assert any("idx_sections_medicine_ord" in step for step in plan)
     assert not any("TEMP B-TREE" in step for step in plan)
+
+
+# --- Issue #22: 規制区分コード ---
+
+def test_regulatory_codes_come_from_the_vendor_lookup():
+    """ハードコードではなく、公式XSLTが document() で読むのと同じ表から引く。"""
+    codes = xml_to_db.load_regulatory_codes()
+    # 旧ハードコード表が間違えていた箇所（腹膜透析液が「特定生物由来製品」に
+    # なっていた原因）。11〜15 が2つずれていた。
+    assert codes["11"] == "処方箋医薬品"
+    assert codes["12"] == "処方箋医薬品"
+    assert codes["13"] == "生物由来製品"
+    assert codes["14"] == "特定生物由来製品"
+    assert codes["15"] == "緊急承認医薬品"
+    # 旧表に定義が無く 'コード9' のような placeholder が漏れていた範囲
+    assert codes["3"] == "麻薬"
+    assert codes["9"] == "習慣性医薬品"
+    assert codes["16"] == "条件付き承認品目"
+    # 正しかった2つ
+    assert codes["1"] == "毒薬"
+    assert codes["2"] == "劇薬"
+
+
+def test_regulatory_label_warns_and_falls_back_on_unknown_code(capsys):
+    xml_to_db._unknown_regulatory_codes.discard("999")
+    assert xml_to_db.regulatory_label("999") == "コード999"
+    assert "未知の規制区分コード: 999" in capsys.readouterr().out
+
+
+def test_extract_specifications_uses_official_labels():
+    """実データで最も多い組み合わせ（9=習慣性医薬品 + 12=処方箋医薬品）。
+    旧実装では 'コード9, 特定生物由来製品' になっていた。"""
+    root = etree.fromstring(f"""
+    <PackIns xmlns="{NS}">
+      <ApprovalEtc>
+        <DetailBrandName id="BRD_1">
+          <ApprovalBrandName><Lang xml:lang="ja">テスト錠</Lang></ApprovalBrandName>
+          <RegulatoryClassification>
+            <RegulatoryClassificationCodeAndNote>
+              <RegulatoryClassificationCode>9</RegulatoryClassificationCode>
+            </RegulatoryClassificationCodeAndNote>
+            <RegulatoryClassificationCodeAndNote>
+              <RegulatoryClassificationCode>12</RegulatoryClassificationCode>
+            </RegulatoryClassificationCodeAndNote>
+          </RegulatoryClassification>
+        </DetailBrandName>
+      </ApprovalEtc>
+    </PackIns>""".encode())
+    assert extract_specifications(root)[0]["regulatory_classification"] == "習慣性医薬品, 処方箋医薬品"
+
+
+def test_duplicate_labels_are_collapsed():
+    """id=11 と id=12 はどちらも「処方箋医薬品」。ラベルは1つに畳む。"""
+    root = etree.fromstring(f"""
+    <PackIns xmlns="{NS}">
+      <ApprovalEtc>
+        <DetailBrandName id="BRD_1">
+          <ApprovalBrandName><Lang xml:lang="ja">テスト錠</Lang></ApprovalBrandName>
+          <RegulatoryClassification>
+            <RegulatoryClassificationCodeAndNote>
+              <RegulatoryClassificationCode>11</RegulatoryClassificationCode>
+            </RegulatoryClassificationCodeAndNote>
+            <RegulatoryClassificationCodeAndNote>
+              <RegulatoryClassificationCode>12</RegulatoryClassificationCode>
+            </RegulatoryClassificationCodeAndNote>
+          </RegulatoryClassification>
+        </DetailBrandName>
+      </ApprovalEtc>
+    </PackIns>""".encode())
+    assert extract_specifications(root)[0]["regulatory_classification"] == "処方箋医薬品"
