@@ -183,15 +183,30 @@ def extract_revision_date(root) -> Optional[str]:
 
 
 def load_regulatory_codes(path: str = VENDOR_REGCLASS_PATH) -> Dict[str, str]:
-    """vendor の RegulatoryClassification.xml からコード -> ラベルを読む。"""
+    """vendor の RegulatoryClassification.xml からコード -> ラベルを読む。
+
+    読むのは必ず Selection/Item[@id] の側。**同じファイルの前半には
+    RegulatoryClassification/Item[@code] という別の（古い）表が同居していて、
+    向精神薬を1エントリにまとめているぶん 9 以降が2つずれている**
+    （前半 11=特定生物由来製品 / Selection 11=処方箋医薬品）。
+    ハードコードしていた旧テーブルはこの前半の写しだったとみられる。
+    XSLTが実際に引くのは Selection の側（preview-include.xsl:647）なので、
+    ここを .//Item のように緩めると同じ取り違えが再発する。
+    """
     root = etree.parse(path).getroot()
     codes = {}
     for item in root.findall("Selection/Item"):
         code = item.get("id")
         # ElementPath は xml: 接頭辞を解決できないので xpath() を使う
         label = item.xpath("Label[@type='preview']/Lang[@xml:lang='ja']")
-        if code and label and (label[0].text or "").strip():
-            codes[code] = label[0].text.strip()
+        if not code or not label:
+            continue
+        # XSLT の xsl:value-of と同じ意味論（子孫テキスト全体）で取る。
+        # .text だけだと、将来 vendor がラベル内にコメントや子要素を入れた
+        # ときにラベルが黙って先頭で切れる。
+        text = "".join(label[0].itertext()).strip()
+        if text:
+            codes[code] = text
     if not codes:
         raise ValueError(f"規制区分の対応表が空です: {path}")
     return codes
