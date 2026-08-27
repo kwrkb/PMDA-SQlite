@@ -54,7 +54,7 @@ $env:PYTHONPATH = "src"
 .venv\Scripts\python.exe src\db_setup.py
 .venv\Scripts\python.exe src\db_setup.py --recreate  # Drop + recreate (required over a pre-sections DB)
 .venv\Scripts\python.exe src\xml_to_db.py 10      # Test load (10 directories)
-.venv\Scripts\python.exe src\xml_to_db.py          # Full load (~25 min, parallelized)
+.venv\Scripts\python.exe src\xml_to_db.py          # Full load (~28 min, parallelized)
 ```
 
 `db_setup.py` refuses to run over a database built by the pre-`sections`
