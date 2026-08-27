@@ -83,11 +83,23 @@ so it was reverted. See `LESSONS.md` before re-proposing either.
 ### Testing
 
 ```bash
-python src/parse_product_name.py   # Run product name parser tests
-python src/html_to_markdown.py     # Inline-image / cross-reference conversion tests
-python src/render_xsl.py           # Regression-test float rounding + HeaderRef resolution
-python src/render_xsl.py <xml>     # ...and inspect one file's sections
+uv pip install -r requirements-dev.txt   # or: pip install -r requirements-dev.txt
+pytest                             # Whole suite (tests/, no PYTHONPATH needed)
+pytest tests/test_xml_to_db.py -k savepoint
+ruff check .                       # Lint (same config CI runs)
+
+python src/render_xsl.py <xml>     # Not a test — inspect one file's sections by eye
 ```
+
+Tests live in `tests/` and run without `data/PMDAraw/`: body-rendering tests go
+through `tests/fixtures/minimal.xml` (hand-written synthetic XML) and the
+committed `vendor/pmda-styles/`. `pyproject.toml` puts `src/` on `pythonpath`.
+DB tests build a throwaway SQLite under `tmp_path` — nothing touches
+`data/pmda.sqlite`. `PMDA_DB_PATH` overrides the DB path if you want a trial
+load out of the way of the real database.
+
+CI (`.github/workflows/ci.yml`) runs `ruff check` plus `pytest` on Python
+3.10–3.14 for every push to `main` and every PR.
 
 ### Validation
 
@@ -112,8 +124,13 @@ src/
 ├── render_xsl.py           # XSLT transform + section splitting + float-rounding fix
 ├── html_to_markdown.py     # HTML fragment → Markdown converter (no external deps)
 ├── xml_to_db.py             # Main loader: parallel XSLT render + structured extraction + DB write
-├── parse_product_name.py  # Product name parsing (has built-in tests)
+├── parse_product_name.py  # Product name parsing
 └── check_db_integrity.py  # Integrity/stats report (new schema)
+
+tests/                      # pytest suite (no real-data dependency)
+├── conftest.py             # Fixtures: minimal XML, rendered HTML tree, temp DB
+├── fixtures/minimal.xml    # Hand-written synthetic package insert
+└── test_*.py
 
 docs/
 ├── XSL_SPIKE.md            # Spike investigation: XSLT feasibility, pitfalls, benchmarks

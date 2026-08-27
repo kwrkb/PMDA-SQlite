@@ -1,7 +1,8 @@
-import sqlite3
 import os
+import sqlite3
 
 from config import DB_PATH
+
 
 def check_integrity():
     if not os.path.exists(DB_PATH):
@@ -126,7 +127,8 @@ def check_integrity():
     dupe_pins = cur.fetchall()
     print(f"Duplicate package_insert_no in medicines: {len(dupe_pins)}")
 
-    cur.execute("SELECT medicine_id, product_name, COUNT(*) FROM specifications GROUP BY medicine_id, product_name HAVING COUNT(*) > 1")
+    cur.execute("SELECT medicine_id, product_name, COUNT(*) FROM specifications "
+                "GROUP BY medicine_id, product_name HAVING COUNT(*) > 1")
     dupe_specs = cur.fetchall()
     print(f"Duplicate specifications (same medicine_id + product_name): {len(dupe_specs)}")
 
@@ -146,7 +148,8 @@ def check_integrity():
     for row in cur.fetchall():
         print(f"  {row['manufacturer']}: {row['c']}")
 
-    cur.execute("SELECT xml_id, COUNT(*) as c FROM sections WHERE xml_id != '' GROUP BY xml_id ORDER BY c DESC LIMIT 10")
+    cur.execute("SELECT xml_id, COUNT(*) as c FROM sections WHERE xml_id != '' "
+                "GROUP BY xml_id ORDER BY c DESC LIMIT 10")
     print("\nTop 10 Section Types (xml_id):")
     for row in cur.fetchall():
         print(f"  {row['xml_id']}: {row['c']}")
