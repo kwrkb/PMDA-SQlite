@@ -7,6 +7,13 @@ XMLをサイトと同じ体裁のHTMLへ変換したうえでMarkdown化し、�
 自前のタグ→カラム対応表で本文をテキスト連結する方式（旧実装）と異なり、項番・見出し・表構造を
 PMDA公式サイトどおりに再現します。詳細な検証結果は [`docs/XSL_SPIKE.md`](docs/XSL_SPIKE.md) を参照してください。
 
+## スコープ
+
+本リポジトリが担うのは **電子添文XML → 正規化SQLite の変換まで**です。
+CLI / REST API / MCPサーバ / GUI といった参照層は**非スコープ**であり、別プロジェクトとして扱います。
+本リポジトリが外部に対して負う契約はスキーマの安定性のみです。
+詳細は [`VISION.md`](VISION.md)（目的・スコープ・設計原則の正典）を参照してください。
+
 ## データベース概要
 
 - **構成**（4テーブル + 互換VIEW）:
@@ -156,7 +163,7 @@ data/
 $env:PYTHONPATH = "src"
 .venv\Scripts\python.exe src\db_setup.py
 .venv\Scripts\python.exe src\xml_to_db.py 10   # テスト用（10ディレクトリのみ）
-.venv\Scripts\python.exe src\xml_to_db.py      # 全件ロード（約25分。XSLT変換を並列実行）
+.venv\Scripts\python.exe src\xml_to_db.py      # 全件ロード（約28分。XSLT変換を並列実行）
 ```
 
 旧スキーマ（本文を `medicines` の35カラムに持っていた版）のDBが残っている場合、
@@ -199,7 +206,11 @@ PMDA-SQlite/
 ├── docs/
 │   ├── XSL_SPIKE.md            # XSL方式のスパイク検証結果
 │   ├── V2_ISSUES.md            # 開発メモ・修正履歴
-│   └── XML_NAMESPACE.md        # XML仕様関連
+│   ├── XML_NAMESPACE.md        # XML仕様関連
+│   └── SPECIFICATION_COMPLIANCE.md # PMDA XML仕様準拠
+├── VISION.md                   # 正典（目的・スコープ・非スコープ・設計原則）
+├── PLAN.md                     # フェーズ進捗と現在地
+├── LESSONS.md                  # 判断記録（却下した代替案とその根拠）
 └── requirements.txt
 ```
 
