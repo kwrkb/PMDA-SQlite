@@ -7,6 +7,10 @@
 `extract_text()` が項番・表・階層を全て潰していたため廃止し、`xml_to_db.py` に
 置き換えています。詳細は [`XSL_SPIKE.md`](XSL_SPIKE.md) を参照してください。
 
+旧パイプラインのスクリプト（`xml_to_json.py` / `validate_json.py` / `json_to_db.py` /
+`parse_xml.py` / `load_data.py`）は 2026-08-28 に削除しました（Issue #13）。
+内容を確認したい場合は git 履歴から参照してください。
+
 ## 現在のファイル構成
 
 ```
@@ -21,12 +25,7 @@ src/
 ├── render_xsl.py          # XSLT変換＋セクション分割＋浮動小数点補正
 ├── html_to_markdown.py    # HTML→Markdown変換
 ├── xml_to_db.py           # メインローダー（並列処理）
-├── parse_product_name.py  # 製品名から規格情報を抽出
-├── xml_to_json.py         # [非推奨] 旧JSON中間パイプライン
-├── validate_json.py       # [非推奨]
-├── json_to_db.py          # [非推奨] 旧ローダー
-├── parse_xml.py           # [非推奨] XMLパーサー（lxml）
-└── load_data.py           # [非推奨] 旧データロード
+└── parse_product_name.py  # 製品名から規格情報を抽出
 
 docs/
 ├── XSL_SPIKE.md              # XSL方式のスパイク検証結果
