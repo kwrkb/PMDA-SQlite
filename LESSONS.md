@@ -148,6 +148,23 @@ if文だけに頼らず、挿入関数自体が「新規かどうか」を返す
   `sections` を1行も作らないまま「成功」と表示される点は塞ぐ必要があった
 - 覆す条件: DBが完全に再生成可能な使い捨て資産になり、ロード時間が十分短くなった場合
 
+## 2026-08-27: パイプライン全体のGo移植を却下し、Python（lxml）を維持する
+
+- 却下した案: `src/` 全体（4,419行）をGoに書き直す。動機は「PMDA添付文書を叩けるAPI/CLIが
+  世の中に見当たらない」ため、単一バイナリで配布できる形にしたかった
+- 決め手: 本パイプラインの中核は `vendor/pmda-styles/`（389KB、`preview-include.xsl` 2,763行、
+  `document()` で外部XMLも参照）のXSLT 1.0適用であり、`requirements.txt` の依存は lxml のみ。
+  Goの純Go XSLT 1.0実装は jbowtie/ratago が唯一だが、公式に "experimental - it lacks full
+  compliance with the spec" と明記されている。実用可能な wamuir/go-xslt は cgo + libxslt で、
+  これは lxml が内部で使っているCライブラリと同一 — 移植しても変換速度は変わらず、
+  Windowsネイティブで libxml2/libxslt のビルドチェーンを抱えるコストだけが増える。
+  性能も律速ではない（18,023件を27ワーカー並列で1,656.7秒＝約27.6分）
+- 覆す条件: Goに仕様準拠のXSLT 1.0処理系が現れた場合、または PMDA が XSLT 以外の
+  レンダリング手段（公式JSON/HTML API等）を提供した場合
+
+  なお「配布可能なツールが欲しい」という動機自体は棄却していない。SQLiteを境界に
+  **参照層のみ**をGoで新規追加する道は残っている（ETLはPythonのまま）。詳細は Issue #8
+
 ## 関連ドキュメント
 
 - [[xsl-fizzy-puddle-plan]] スパイク検証・本実装のプラン全文
