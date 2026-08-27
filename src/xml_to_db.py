@@ -430,11 +430,38 @@ def insert_sections(cur: sqlite3.Cursor, medicine_id: int, sections: List[dict])
     )
 
 
+# 何件ごとに commit するか。1件ごとの commit は全件ロードで約18,000回の
+# fsync を伴い、DB書き込み時間の大半を占めていた（Issue #14）。
+# 1件分の巻き戻しは SAVEPOINT で行うので、バッチ化しても失敗の影響は
+# 他の件に波及しない。
+BATCH_SIZE = 500
+
+SAVEPOINT_NAME = "rec"
+
+
+def _undo_record(cur: sqlite3.Cursor) -> None:
+    """SAVEPOINT_NAME まで巻き戻して解放する（1件分の挿入だけを取り消す）。"""
+    try:
+        cur.execute(f"ROLLBACK TO {SAVEPOINT_NAME}")
+        cur.execute(f"RELEASE {SAVEPOINT_NAME}")
+    except sqlite3.Error as e:
+        print(f"  ✗ SAVEPOINTの巻き戻しに失敗: {e}")
+
+
 def store_result(conn: sqlite3.Connection, result: dict) -> Tuple[bool, str]:
+    """1件分をDBへ書き込む。コミットは呼び出し側(load_all)がバッチ単位で行う。
+
+    1件ごとの commit をやめてもなお「1件の失敗が他の件を巻き込まない」ことを
+    保証するため、SAVEPOINT で1件分を包む。単に commit 間隔を伸ばすだけだと、
+    失敗時の conn.rollback() が同じトランザクションに載っている成功済みの
+    数百件まで破棄してしまう。
+    """
     cur = conn.cursor()
+    cur.execute(f"SAVEPOINT {SAVEPOINT_NAME}")
     try:
         medicine_id, is_new = insert_medicine(cur, result["medicine_data"])
         if not medicine_id:
+            _undo_record(cur)
             return False, "medicines挿入に失敗"
 
         spec_count = 0
@@ -442,7 +469,7 @@ def store_result(conn: sqlite3.Connection, result: dict) -> Tuple[bool, str]:
             if insert_specification(cur, medicine_id, spec):
                 spec_count += 1
         if spec_count == 0:
-            conn.rollback()
+            _undo_record(cur)
             return False, "規格情報の登録に失敗"
 
         # interactions/sectionsには一意制約が無いため、既存medicine（再実行等で
@@ -451,10 +478,10 @@ def store_result(conn: sqlite3.Connection, result: dict) -> Tuple[bool, str]:
             insert_interactions(cur, medicine_id, result["interactions"])
             insert_sections(cur, medicine_id, result["sections"])
 
-        conn.commit()
+        cur.execute(f"RELEASE {SAVEPOINT_NAME}")
         return True, f"medicine_id={medicine_id}, is_new={is_new}, specs={spec_count}, interactions={len(result['interactions'])}, sections={len(result['sections'])}"
     except Exception as e:
-        conn.rollback()
+        _undo_record(cur)
         traceback.print_exc()
         return False, str(e)
 
@@ -520,6 +547,7 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
     errors: List[Tuple[str, str]] = []
     # 一般名が取れず販売名で代用した件数（Issue #16）。血液保存液・輸液等が該当する。
     brand_name_fallbacks: List[Tuple[str, str]] = []
+    pending = 0  # 未コミットの書き込み件数
     start_time = time.time()
 
     # プロファイル用集計。親プロセスの実時間を「結果待ち」と「DB書き込み」に分け、
@@ -557,6 +585,10 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
                     )
                 t_db = time.perf_counter()
                 ok, message = store_result(conn, result)
+                pending += 1
+                if pending >= BATCH_SIZE:
+                    conn.commit()
+                    pending = 0
                 parent_db += time.perf_counter() - t_db
                 if ok:
                     success_count += 1
@@ -572,6 +604,9 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
                 elapsed = time.time() - start_time
                 print(f"  [{processed}/{total}] 成功: {success_count}, エラー: {error_count} ({elapsed:.1f}秒)")
 
+    t_db = time.perf_counter()
+    conn.commit()  # 最後のバッチ。これが無いと末尾の最大 BATCH_SIZE 件が失われる
+    parent_db += time.perf_counter() - t_db
     conn.close()
 
     elapsed = time.time() - start_time
