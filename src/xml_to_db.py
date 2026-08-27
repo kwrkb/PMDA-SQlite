@@ -61,8 +61,11 @@ def _elements(node):
 # 一般名として無効な値。PMDAのXMLは「該当なし」をハイフン類1文字で表す。
 INVALID_NAME_VALUES = frozenset(("-", "－", "―", "—", ""))
 
-# extract_generic_name() の取得元ラベル（load_all() の集計とログ出力で使う）
-GENERIC_NAME_SOURCES = ("generic_name", "therapeutic_classification", "brand_name")
+# extract_generic_name() が返す取得元ラベル。生の文字列を各所に散らすと、
+# 片方だけ書き換えたときに load_all() の集計が黙って0件になるため定数にする。
+SOURCE_GENERIC_NAME = "generic_name"
+SOURCE_THERAPEUTIC_CLASSIFICATION = "therapeutic_classification"
+SOURCE_BRAND_NAME = "brand_name"
 
 
 def _first_brand_name(root) -> Optional[str]:
@@ -81,7 +84,7 @@ def _first_brand_name(root) -> Optional[str]:
 
 
 def extract_generic_name(root) -> Tuple[Optional[str], Optional[str]]:
-    """一般名を抽出する。戻り値は (一般名, 取得元) で、取得元は GENERIC_NAME_SOURCES のいずれか。
+    """一般名を抽出する。戻り値は (一般名, 取得元) で、取得元は SOURCE_* のいずれか。
 
     GenericName -> TherapeuticClassification -> 販売名 の順にフォールバックする。
 
@@ -101,10 +104,10 @@ def extract_generic_name(root) -> Tuple[Optional[str], Optional[str]]:
             lang = detail.find(_tag("Lang"))
             text = _text(lang)
             if text and text not in INVALID_NAME_VALUES:
-                return text, "generic_name"
+                return text, SOURCE_GENERIC_NAME
         all_text = _text(gn)
         if all_text and all_text not in INVALID_NAME_VALUES:
-            return all_text, "generic_name"
+            return all_text, SOURCE_GENERIC_NAME
 
     tc = root.find(_tag("TherapeuticClassification"))
     if tc is not None:
@@ -112,11 +115,11 @@ def extract_generic_name(root) -> Tuple[Optional[str], Optional[str]]:
         if detail is not None:
             text = _text(detail.find(_tag("Lang")))
             if text:
-                return text, "therapeutic_classification"
+                return text, SOURCE_THERAPEUTIC_CLASSIFICATION
 
     brand = _first_brand_name(root)
     if brand:
-        return brand, "brand_name"
+        return brand, SOURCE_BRAND_NAME
     return None, None
 
 
@@ -548,7 +551,7 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
                 worker_totals[key] = worker_totals.get(key, 0.0) + value
 
             if result["ok"]:
-                if result["medicine_data"].get("generic_name_source") == "brand_name":
+                if result["medicine_data"].get("generic_name_source") == SOURCE_BRAND_NAME:
                     brand_name_fallbacks.append(
                         (result["xml_path"], result["medicine_data"]["generic_name"])
                     )
