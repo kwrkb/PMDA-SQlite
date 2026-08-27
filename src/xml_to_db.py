@@ -455,8 +455,17 @@ def store_result(conn: sqlite3.Connection, result: dict) -> Tuple[bool, str]:
     保証するため、SAVEPOINT で1件分を包む。単に commit 間隔を伸ばすだけだと、
     失敗時の conn.rollback() が同じトランザクションに載っている成功済みの
     数百件まで破棄してしまう。
+
+    先に BEGIN を明示するのは必須。SQLite は「BEGIN ではなく SAVEPOINT で
+    開始されたトランザクション」の最外殻の savepoint を RELEASE した時点で
+    コミットする。Python の sqlite3 は DML の前にしか暗黙の BEGIN を出さない
+    ため、BEGIN 無しだと SAVEPOINT 自身がトランザクションを開始してしまい、
+    RELEASE ごとにコミット＝1件ごとの commit のままで BATCH_SIZE が無意味に
+    なる（Issue #14 の目的である fsync 削減がまったく効かない）。
     """
     cur = conn.cursor()
+    if not conn.in_transaction:
+        conn.execute("BEGIN")
     cur.execute(f"SAVEPOINT {SAVEPOINT_NAME}")
     try:
         medicine_id, is_new = insert_medicine(cur, result["medicine_data"])
