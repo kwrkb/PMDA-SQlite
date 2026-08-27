@@ -68,6 +68,18 @@ The loader is CPU-bound (XSLT rendering is superlinear in document size — see
 `docs/XSL_SPIKE.md`) and uses `multiprocessing` across `cpu_count() - 1` workers.
 DB writes happen serially in the parent process.
 
+`load_all()` prints a timing breakdown at the end of every load. **Read it
+before attributing a slow load to anything other than XSLT.** Measured
+2026-08-27, 17,747 files / 27 workers: 1,527s wall at **99.3% parallel
+efficiency** — worker wall time totals 40,932s against a 27-way lower bound of
+1,516s, i.e. 0.7% overhead. **97.3% of worker time is the XSLT transform**
+(39,830s); Markdown conversion 872s, XML parsing 151s, tag extraction 74s.
+The serial DB writes cost 261s but overlap with worker compute and do not
+extend the run, and pool startup is 0.2s — neither is a bottleneck. Feeding
+workers in file-size-descending order (LPT scheduling, to keep the 25s
+documents off the tail) was implemented and measured: **1,550s, 1.5% slower**,
+so it was reverted. See `LESSONS.md` before re-proposing either.
+
 ### Testing
 
 ```bash

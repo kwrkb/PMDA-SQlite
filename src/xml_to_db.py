@@ -252,26 +252,48 @@ def _worker_init(xsl_path: str):
 
 def _process_one(xml_path: str) -> dict:
     """1つのXMLファイルを処理し、DB格納に必要なデータをまとめて返す。
-    例外はここで捕まえて呼び出し側に伝える（親プロセスをクラッシュさせない）。"""
+    例外はここで捕まえて呼び出し側に伝える（親プロセスをクラッシュさせない）。
+
+    戻り値の "timings" は load_all() のプロファイル出力用。ワーカー内の実時間を
+    parse / extract / xslt / markdown に分解して親プロセスへ返す。
+    「全件ロードが遅い」という報告を推測で潰さないための計測点であり、
+    実際 Issue #2 の並列効率仮説はこの内訳で棄却された（XSLT変換が97%）。
+    失敗時も、そこまでに測れた分を返す。"""
+    t0 = time.perf_counter()
+    timings = {"parse": 0.0, "extract": 0.0, "xslt": 0.0, "markdown": 0.0, "worker_total": 0.0}
+
+    def _fail(message: str) -> dict:
+        timings["worker_total"] = time.perf_counter() - t0
+        return {"ok": False, "xml_path": xml_path, "error": message, "timings": timings}
+
     try:
+        t = time.perf_counter()
         xml_doc = etree.parse(xml_path)
         root = xml_doc.getroot()
         source_file = os.path.basename(xml_path)
+        timings["parse"] = time.perf_counter() - t
 
+        t = time.perf_counter()
         medicine_data = extract_medicine_data(root, source_file)
         if not medicine_data["generic_name"] or not medicine_data["package_insert_no"]:
-            return {"ok": False, "xml_path": xml_path, "error": "generic_nameまたはpackage_insert_noが取得できません"}
+            return _fail("generic_nameまたはpackage_insert_noが取得できません")
 
         spec_list = extract_specifications(root)
         if not spec_list:
-            return {"ok": False, "xml_path": xml_path, "error": "規格情報（DetailBrandName）が見つかりません"}
+            return _fail("規格情報（DetailBrandName）が見つかりません")
 
         interaction_list = extract_interactions(root)
+        timings["extract"] = time.perf_counter() - t
 
+        t = time.perf_counter()
         html_root = transform_xml(_worker_xslt, xml_path)
+        timings["xslt"] = time.perf_counter() - t
+
+        t = time.perf_counter()
         sections = extract_sections(html_root)
         for s in sections:
             s["body_md"] = convert_section_body(s.pop("body_el"))
+        timings["markdown"] = time.perf_counter() - t
 
         specs_parsed = []
         for spec_raw in spec_list:
@@ -279,6 +301,7 @@ def _process_one(xml_path: str) -> dict:
             specs_parsed.append({**spec_raw, "dosage_form": parsed["dosage_form"],
                                   "strength": parsed["strength"], "strength_unit": parsed["strength_unit"]})
 
+        timings["worker_total"] = time.perf_counter() - t0
         return {
             "ok": True,
             "xml_path": xml_path,
@@ -286,9 +309,10 @@ def _process_one(xml_path: str) -> dict:
             "specs": specs_parsed,
             "interactions": interaction_list,
             "sections": sections,
+            "timings": timings,
         }
     except Exception as e:
-        return {"ok": False, "xml_path": xml_path, "error": f"{type(e).__name__}: {e}"}
+        return _fail(f"{type(e).__name__}: {e}")
 
 
 # --- DB書き込み（親プロセスで直列） ---
@@ -428,10 +452,38 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
     errors: List[Tuple[str, str]] = []
     start_time = time.time()
 
+    # プロファイル用集計。親プロセスの実時間を「結果待ち」と「DB書き込み」に分け、
+    # ワーカー側の内訳と突き合わせる。DB書き込みはワーカーの計算と重なるため、
+    # 全体所要時間を押し上げているかどうかは「並列効率」を見ないと判断できない。
+    parent_wait = 0.0
+    parent_db = 0.0
+    worker_totals = {"parse": 0.0, "extract": 0.0, "xslt": 0.0, "markdown": 0.0, "worker_total": 0.0}
+
+    first_result_at = None
+
     with Pool(processes=workers, initializer=_worker_init, initargs=(VENDOR_XSL_PATH,)) as pool:
-        for i, result in enumerate(pool.imap_unordered(_process_one, xml_paths, chunksize=4)):
+        pool_ready_at = time.time() - start_time
+        result_iter = pool.imap_unordered(_process_one, xml_paths, chunksize=4)
+        i = -1
+        while True:
+            t_wait = time.perf_counter()
+            try:
+                result = next(result_iter)
+            except StopIteration:
+                break
+            finally:
+                parent_wait += time.perf_counter() - t_wait
+            i += 1
+            if first_result_at is None:
+                first_result_at = time.time() - start_time
+
+            for key, value in (result.get("timings") or {}).items():
+                worker_totals[key] = worker_totals.get(key, 0.0) + value
+
             if result["ok"]:
+                t_db = time.perf_counter()
                 ok, message = store_result(conn, result)
+                parent_db += time.perf_counter() - t_db
                 if ok:
                     success_count += 1
                 else:
@@ -456,6 +508,19 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
     print(f"成功: {success_count}件")
     print(f"失敗: {error_count}件")
     print(f"所要時間: {elapsed:.1f}秒")
+    print()
+    print("--- 内訳（プロファイル） ---")
+    print(f"ワーカー実時間合計: {worker_totals['worker_total']:.1f}秒"
+          f"（{workers}並列の理論下限 {worker_totals['worker_total'] / workers:.1f}秒）")
+    print(f"  うち XSLT変換     : {worker_totals['xslt']:.1f}秒")
+    print(f"  うち XMLパース    : {worker_totals['parse']:.1f}秒")
+    print(f"  うち タグ抽出     : {worker_totals['extract']:.1f}秒")
+    print(f"  うち Markdown化   : {worker_totals['markdown']:.1f}秒")
+    print(f"ワーカー起動: Pool生成まで {pool_ready_at:.1f}秒 / 最初の結果まで {(first_result_at or 0):.1f}秒")
+    print(f"親プロセス DB書き込み: {parent_db:.1f}秒（全体の {parent_db / elapsed * 100:.1f}%）")
+    print(f"親プロセス 結果待ち  : {parent_wait:.1f}秒（全体の {parent_wait / elapsed * 100:.1f}%）")
+    print(f"並列効率: {worker_totals['worker_total'] / elapsed / workers * 100:.1f}%"
+          f"（ワーカー実時間合計 / (実測 × ワーカー数)）")
 
     if errors:
         print()
