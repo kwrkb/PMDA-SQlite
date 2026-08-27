@@ -266,6 +266,30 @@ def test_regulatory_codes_come_from_the_vendor_lookup():
     assert codes["2"] == "劇薬"
 
 
+def test_regulatory_codes_ignore_the_older_table_in_the_same_file():
+    """同じファイルの前半には Item[@code] という別の古い表が同居していて、
+    向精神薬を1エントリにまとめているぶん9以降が2つずれている（前半の11は
+    特定生物由来製品）。XSLTが引くのは Selection 側なので、XPathを .//Item の
+    ように緩めて前半を拾ってしまわないことを固定する。"""
+    codes = xml_to_db.load_regulatory_codes()
+    assert codes["11"] == "処方箋医薬品"
+    assert "特定生物由来製品" not in (codes["11"], codes["12"])
+
+
+def test_regulatory_label_reads_the_whole_label_text(tmp_path):
+    """ラベル内にコメントや子要素が入っても、xsl:value-of と同じく全体を読む。
+    .text だけを見ていると先頭で切れたラベルが黙ってDBに入る。"""
+    path = tmp_path / "RegulatoryClassification.xml"
+    path.write_text(
+        '<RegulatoryClassifications><Selection>'
+        '<Item id="1"><Label type="preview">'
+        '<Lang xml:lang="ja">処方箋<!--注-->医薬<b>品</b></Lang>'
+        '</Label></Item></Selection></RegulatoryClassifications>',
+        encoding="utf-8",
+    )
+    assert xml_to_db.load_regulatory_codes(str(path)) == {"1": "処方箋医薬品"}
+
+
 def test_regulatory_label_warns_and_falls_back_on_unknown_code(capsys):
     xml_to_db._unknown_regulatory_codes.discard("999")
     assert xml_to_db.regulatory_label("999") == "コード999"

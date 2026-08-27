@@ -263,6 +263,14 @@ re-derive this mapping by hand.** Codes 11 and 12 both map to 処方箋医薬品
 An unknown code still yields `コード{n}` but now prints a warning once per
 process, so a future vendor update that adds codes is visible.
 
+**The same vendor file contains a second, older table** —
+`RegulatoryClassifications/RegulatoryClassification/Item[@code]`, which folds
+the three 向精神薬 classes into one entry and is therefore shifted by two from
+code 9 onward (its `11` is 特定生物由来製品). The replaced hardcoded dict looks
+like a copy of that block. `load_regulatory_codes()` anchors at
+`Selection/Item` for exactly this reason; loosening the XPath (e.g. to
+`.//Item`) silently reintroduces the old mislabeling.
+
 ### Deduplication Logic (changed from the deprecated pipeline)
 
 The deprecated `json_to_db.py:find_or_create_medicine()` grouped by
