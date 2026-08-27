@@ -11,6 +11,9 @@ from typing import Optional
 # データベースファイルパス
 DB_PATH = 'data/pmda.sqlite'
 
+# ロード時のエラーログ出力先（xml_to_db.py が失敗一覧を書き出す）
+LOG_DIR = 'logs'
+
 # PMDAデータの基本ディレクトリ（環境変数で上書き可能。
 # ダウンロード先が data/PMDAraw/ と異なる場合に使う）
 PMDA_RAW_DIR = os.environ.get('PMDA_RAW_DIR', 'data/PMDAraw')

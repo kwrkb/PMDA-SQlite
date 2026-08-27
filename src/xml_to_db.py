@@ -22,13 +22,14 @@ import sqlite3
 import sys
 import time
 import traceback
+from datetime import datetime
 from glob import glob
 from multiprocessing import Pool, cpu_count
 from typing import Dict, List, Optional, Tuple
 
 from lxml import etree
 
-from config import DB_PATH, PMDA_RAW_DIR, VENDOR_XSL_PATH, get_xml_source_dir
+from config import DB_PATH, LOG_DIR, PMDA_RAW_DIR, VENDOR_XSL_PATH, get_xml_source_dir
 from db_setup import rebuild_fts_index
 from html_to_markdown import convert_section_body
 from parse_product_name import parse_product_name
@@ -57,19 +58,53 @@ def _elements(node):
 
 # --- 構造化フィールド抽出（旧 src/json_to_db.py の抽出ロジックを lxml 要素走査に移植） ---
 
-def extract_generic_name(root) -> Optional[str]:
-    """一般名を抽出する。GenericName -> TherapeuticClassification フォールバック。"""
+# 一般名として無効な値。PMDAのXMLは「該当なし」をハイフン類1文字で表す。
+INVALID_NAME_VALUES = frozenset(("-", "－", "―", "—", ""))
+
+# extract_generic_name() の取得元ラベル（load_all() の集計とログ出力で使う）
+GENERIC_NAME_SOURCES = ("generic_name", "therapeutic_classification", "brand_name")
+
+
+def _first_brand_name(root) -> Optional[str]:
+    """最初の ApprovalEtc/DetailBrandName/ApprovalBrandName/Lang（販売名）を返す。"""
+    approval = root.find(_tag("ApprovalEtc"))
+    if approval is None:
+        return None
+    for brand in approval.findall(_tag("DetailBrandName")):
+        abn = brand.find(_tag("ApprovalBrandName"))
+        if abn is None:
+            continue
+        text = _text(abn.find(_tag("Lang")))
+        if text and text not in INVALID_NAME_VALUES:
+            return text
+    return None
+
+
+def extract_generic_name(root) -> Tuple[Optional[str], Optional[str]]:
+    """一般名を抽出する。戻り値は (一般名, 取得元) で、取得元は GENERIC_NAME_SOURCES のいずれか。
+
+    GenericName -> TherapeuticClassification -> 販売名 の順にフォールバックする。
+
+    最後の販売名フォールバックは、血液保存液・輸液・アレルゲン希釈液のように
+    そもそも一般名の概念を持たない製剤のためのもの（Issue #16）。これらは
+    <GenericName><Detail><Lang>-</Lang> かつ TherapeuticClassification 要素なしで、
+    PackageInsertNo も本文も正常に存在するのに、以前は generic_name が取れないという
+    理由だけで文書ごと破棄されていた（17,747件中17件）。
+    medicines.generic_name は NOT NULL なので、販売名を入れて取り込むほうが
+    「本文ごと捨てる」より情報が残る。取得元を返すのは、後から
+    「これは一般名ではなく販売名だ」と識別できるようにするため。
+    """
     gn = root.find(_tag("GenericName"))
     if gn is not None:
         detail = gn.find(_tag("Detail"))
         if detail is not None:
             lang = detail.find(_tag("Lang"))
             text = _text(lang)
-            if text and text not in ("-", "－", "―", "—", ""):
-                return text
+            if text and text not in INVALID_NAME_VALUES:
+                return text, "generic_name"
         all_text = _text(gn)
-        if all_text and all_text not in ("-", "－", "―", "—", ""):
-            return all_text
+        if all_text and all_text not in INVALID_NAME_VALUES:
+            return all_text, "generic_name"
 
     tc = root.find(_tag("TherapeuticClassification"))
     if tc is not None:
@@ -77,8 +112,12 @@ def extract_generic_name(root) -> Optional[str]:
         if detail is not None:
             text = _text(detail.find(_tag("Lang")))
             if text:
-                return text
-    return None
+                return text, "therapeutic_classification"
+
+    brand = _first_brand_name(root)
+    if brand:
+        return brand, "brand_name"
+    return None, None
 
 
 def extract_manufacturer(root) -> Optional[str]:
@@ -226,8 +265,12 @@ def extract_interactions(root) -> List[dict]:
 
 
 def extract_medicine_data(root, source_file: str) -> dict:
+    generic_name, generic_name_source = extract_generic_name(root)
     med = {
-        "generic_name": extract_generic_name(root),
+        "generic_name": generic_name,
+        # DBには入れない補助情報。load_all() が「販売名にフォールバックした件数」を
+        # 集計するために使う（insert_medicine は列名を明示列挙するので影響しない）。
+        "generic_name_source": generic_name_source,
         "manufacturer": extract_manufacturer(root),
         "revision_date": extract_revision_date(root),
         "source_file": source_file,
@@ -429,6 +472,28 @@ def iter_xml_paths(xml_source_dir: str, limit: Optional[int] = None) -> List[str
     return paths
 
 
+def write_error_log(errors: List[Tuple[str, str]], log_dir: str = LOG_DIR) -> Optional[str]:
+    """失敗した(XMLパス, 理由)の一覧をログファイルへ全件書き出し、そのパスを返す。
+
+    コンソール出力は先頭20件で打ち切られるため、失敗の全体像（どの製剤群が
+    どの理由で落ちたか）が後から追えなかった。書き出しに失敗しても
+    ロード自体は成功しているので、例外は握りつぶして None を返す。
+    """
+    if not errors:
+        return None
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        path = os.path.join(log_dir, f"load_errors_{datetime.now():%Y%m%d_%H%M%S}.log")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(f"# PMDA-SQLite ロードエラー {datetime.now():%Y-%m-%d %H:%M:%S} / 全{len(errors)}件\n")
+            for xml_path, message in errors:
+                f.write(f"{xml_path}\t{message}\n")
+        return path
+    except OSError as e:
+        print(f"  ✗ エラーログの書き出しに失敗しました: {e}")
+        return None
+
+
 def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional[int] = None):
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
@@ -450,6 +515,8 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
     success_count = 0
     error_count = 0
     errors: List[Tuple[str, str]] = []
+    # 一般名が取れず販売名で代用した件数（Issue #16）。血液保存液・輸液等が該当する。
+    brand_name_fallbacks: List[Tuple[str, str]] = []
     start_time = time.time()
 
     # プロファイル用集計。親プロセスの実時間を「結果待ち」と「DB書き込み」に分け、
@@ -481,6 +548,10 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
                 worker_totals[key] = worker_totals.get(key, 0.0) + value
 
             if result["ok"]:
+                if result["medicine_data"].get("generic_name_source") == "brand_name":
+                    brand_name_fallbacks.append(
+                        (result["xml_path"], result["medicine_data"]["generic_name"])
+                    )
                 t_db = time.perf_counter()
                 ok, message = store_result(conn, result)
                 parent_db += time.perf_counter() - t_db
@@ -522,11 +593,23 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
     print(f"並列効率: {worker_totals['worker_total'] / elapsed / workers * 100:.1f}%"
           f"（ワーカー実時間合計 / (実測 × ワーカー数)）")
 
+    if brand_name_fallbacks:
+        print()
+        print(f"一般名が取得できず販売名で代用: {len(brand_name_fallbacks)}件"
+              "（血液保存液・輸液・希釈液など、一般名の概念を持たない製剤）")
+        for path, name in brand_name_fallbacks[:10]:
+            print(f"  ・{name}  ({os.path.basename(path)})")
+        if len(brand_name_fallbacks) > 10:
+            print(f"  ... 他 {len(brand_name_fallbacks) - 10}件")
+
     if errors:
+        log_path = write_error_log(errors)
         print()
         print(f"エラー詳細（先頭20件、全{len(errors)}件）:")
         for path, msg in errors[:20]:
             print(f"  ✗ {path}: {msg}")
+        if log_path:
+            print(f"全件のエラーログ: {log_path}")
 
     rebuild_fts_index()
     print_database_stats()

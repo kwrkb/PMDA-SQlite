@@ -197,12 +197,24 @@ into the DB or repo.
 
 ### Generic Name Extraction
 
-Priority-based extraction (`xml_to_db.py:extract_generic_name`):
-1. `GenericName/Detail/Lang` - Primary source
-2. `GenericName` full text - Fallback for nested structures
-3. `TherapeuticClassification` - Final fallback
+Priority-based extraction (`xml_to_db.py:extract_generic_name`), which returns
+`(name, source)` — the source label tells you which rung it fell to:
+1. `GenericName/Detail/Lang` → `"generic_name"` - Primary source
+2. `GenericName` full text → `"generic_name"` - Fallback for nested structures
+3. `TherapeuticClassification` → `"therapeutic_classification"`
+4. First `ApprovalEtc/DetailBrandName/ApprovalBrandName/Lang` (the **brand
+   name**) → `"brand_name"` - Last resort
 
-Invalid values (`-`, `－`, `―`, empty) trigger fallback.
+Invalid values (`-`, `－`, `―`, `—`, empty — `INVALID_NAME_VALUES`) trigger fallback.
+
+Rung 4 exists for products that have no generic name at all: blood-preservation
+solutions, infusions, allergen diluents (`ACD-A液`, `テルモ血液バッグ`,
+`カーミパック生理食塩液`, …). They carry `<GenericName><Detail><Lang>-</Lang>` and
+no `TherapeuticClassification`, yet their `PackageInsertNo` and body text are
+fine. Before this rung the loader discarded those documents entirely (17 of
+17,747). `medicines.generic_name` is `NOT NULL`, so filling it with the brand
+name keeps the document; `load_all()` prints how many rows took this path so it
+stays visible that those values are brand names, not generic names.
 
 ## Critical Implementation Details
 
