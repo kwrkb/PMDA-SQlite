@@ -106,12 +106,17 @@ def _list_to_markdown(list_el, depth: int = 0) -> str:
     ordered = list_el.tag == "ol"
     indent = NESTED_LIST_INDENT * depth
     lines = []
-    for i, li in enumerate(list_el.findall("li"), 1):
+    # 出力した項目だけを数える。enumerate をそのまま使うと、スキップした空の li
+    # の分だけ番号が飛び（<ol><li></li><li>本文</li></ol> が '2. 本文' になる）、
+    # 本文中の相互参照と項番が食い違う。
+    number = 0
+    for li in list_el.findall("li"):
         text = _li_own_text(li)
         sublists = [c for c in li if isinstance(c.tag, str) and c.tag in ("ol", "ul")]
         if not text and not sublists:
             continue
-        prefix = f"{i}. " if ordered else "- "
+        number += 1
+        prefix = f"{number}. " if ordered else "- "
         # 本文が空でも子リストがあれば、親項目を空マーカーとして出さないと
         # 階層が1段浅くなってしまう
         lines.append(indent + prefix + text)
@@ -276,6 +281,10 @@ def _run_tests():
     # 本文が空でも子リストがあれば親項目のマーカーを出す（階層が浅くならないように）
     assert md('<div class="level-1"><ul><li><ul><li>子のみ</li></ul></li></ul></div>') \
         == "- \n    - 子のみ"
+
+    # 空の li を飛ばしても ol の番号は飛ばさない（1始まりで詰める）
+    assert md('<div class="level-1"><ol><li></li><li>本文A</li><li>本文B</li></ol></div>') \
+        == "1. 本文A\n2. 本文B"
 
     print("回帰テストOK: html_to_markdown")
 
