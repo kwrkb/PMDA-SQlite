@@ -113,12 +113,7 @@ src/
 ├── html_to_markdown.py     # HTML fragment → Markdown converter (no external deps)
 ├── xml_to_db.py             # Main loader: parallel XSLT render + structured extraction + DB write
 ├── parse_product_name.py  # Product name parsing (has built-in tests)
-├── check_db_integrity.py  # Integrity/stats report (new schema)
-├── xml_to_json.py         # [DEPRECATED] old JSON intermediate pipeline, kept for debugging
-├── validate_json.py       # [DEPRECATED]
-├── json_to_db.py          # [DEPRECATED] naive text-concatenation loader; extraction logic ported into xml_to_db.py
-├── parse_xml.py           # [DEPRECATED]
-└── load_data.py           # [DEPRECATED]
+└── check_db_integrity.py  # Integrity/stats report (new schema)
 
 docs/
 ├── XSL_SPIKE.md            # Spike investigation: XSLT feasibility, pitfalls, benchmarks
