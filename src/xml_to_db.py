@@ -25,7 +25,7 @@ import traceback
 from datetime import datetime
 from glob import glob
 from multiprocessing import Pool, cpu_count
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from lxml import etree
 
@@ -488,7 +488,8 @@ def store_result(conn: sqlite3.Connection, result: dict) -> Tuple[bool, str]:
             insert_sections(cur, medicine_id, result["sections"])
 
         cur.execute(f"RELEASE {SAVEPOINT_NAME}")
-        return True, f"medicine_id={medicine_id}, is_new={is_new}, specs={spec_count}, interactions={len(result['interactions'])}, sections={len(result['sections'])}"
+        return True, (f"medicine_id={medicine_id}, is_new={is_new}, specs={spec_count}, "
+                      f"interactions={len(result['interactions'])}, sections={len(result['sections'])}")
     except Exception as e:
         _undo_record(cur)
         traceback.print_exc()

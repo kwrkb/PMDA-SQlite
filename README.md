@@ -198,6 +198,11 @@ PMDA-SQlite/
 │   ├── xml_to_db.py            # メインローダー（並列処理）
 │   ├── parse_product_name.py  # 製品名解析（規格抽出）
 │   └── check_db_integrity.py  # DB整合性チェック
+├── tests/                      # pytest（実データ非依存）
+│   ├── conftest.py
+│   ├── fixtures/minimal.xml    # 手書きの合成添付文書XML
+│   └── test_*.py
+├── .github/workflows/ci.yml    # ruff + pytest（Python 3.10〜3.14）
 ├── docs/
 │   ├── XSL_SPIKE.md            # XSL方式のスパイク検証結果
 │   ├── V2_ISSUES.md            # 開発メモ・修正履歴
@@ -206,8 +211,27 @@ PMDA-SQlite/
 ├── VISION.md                   # 正典（目的・スコープ・非スコープ・設計原則）
 ├── PLAN.md                     # フェーズ進捗と現在地
 ├── LESSONS.md                  # 判断記録（却下した代替案とその根拠）
-└── requirements.txt
+├── pyproject.toml              # pytest / ruff 設定
+├── requirements.txt
+└── requirements-dev.txt        # pytest, ruff
 ```
+
+## テスト
+
+```powershell
+uv pip install -r requirements-dev.txt --python .venv\Scripts\python.exe
+.venv\Scripts\python.exe -m pytest        # 全テスト
+.venv\Scripts\python.exe -m ruff check .  # Lint（CIと同じ設定）
+```
+
+テストは `data/PMDAraw/` を必要としません。本文レンダリングの検証は
+`tests/fixtures/minimal.xml`（手書きの合成XML）とコミット済みの
+`vendor/pmda-styles/` を通して行い、DBのテストは `tmp_path` 上の一時SQLiteを
+使うため `data/pmda.sqlite` には触れません。試験ロードで本番DBを避けたい場合は
+環境変数 `PMDA_DB_PATH` でDBパスを上書きできます。
+
+CI（`.github/workflows/ci.yml`）は push / PR ごとに Python 3.10〜3.14 で
+`ruff check` と `pytest` を実行します。
 
 ## 注意事項
 - 本データはPMDAの公開情報を加工したものです。

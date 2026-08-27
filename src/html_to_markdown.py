@@ -8,7 +8,6 @@ PMDA公式XSLが出すタグ語彙は限定的（div/p/span/a/ol/ul/li/table/img
 
 import re
 
-
 # ブロックを作らず、周囲のテキストと同じ行に流し込むタグ。
 # img もここに含める: PMDA公式XSLは InlineGraphic を <p> や表セルの内側に
 # 直接 <img> として出力する（preview-include.xsl の InlineGraphic 分岐）ため、
@@ -216,78 +215,3 @@ def convert_section_body(body_el) -> str:
 
     walk(body_el)
     return "\n\n".join(p for p in parts if p)
-
-
-def _run_tests():
-    from lxml import html
-
-    def md(fragment: str) -> str:
-        return convert_section_body(html.fromstring(fragment))
-
-    # <p> 内のインライン画像（XSLは InlineGraphic を <p> の中に直接出力する）
-    assert md('<div class="level-1"><p>用法は<img src="figures/a.gif"/>のとおり。</p></div>') \
-        == "用法は![図](a.gif)のとおり。"
-
-    # 表セル内のインライン画像
-    assert md('<div class="level-1"><table><tr><th>構造</th></tr>'
-              '<tr><td><img src="figures/b.jpg"/></td></tr></table></div>') \
-        == "| 構造 |\n|---|\n| ![図](b.jpg) |"
-
-    # リスト項目内のインライン画像
-    assert md('<div class="level-1"><ul><li>図: <img src="figures/c.gif"/></li></ul></div>') \
-        == "- 図: ![図](c.gif)"
-
-    # HeaderRef はテキスト解決済みで渡ってくる（render_xsl.resolve_header_refs）。
-    # 参照テキストが本文から欠落しないこと。
-    assert md('<div class="level-1"><p>出血のおそれがある。[<a class="HeaderRef" '
-              'href="#HDR_X">［10.2 参照］</a>]</p></div>') \
-        == "出血のおそれがある。[［10.2 参照］]"
-
-    # <p>で囲まれないコンテナ直下テキストは、インライン要素をまたいで1文にまとまる
-    assert md('<div class="level-1">次の副作用が<a class="HeaderRef" href="#HDR_Y">'
-              '［11.1 参照］</a>報告されている。</div>') \
-        == "次の副作用が［11.1 参照］報告されている。"
-
-    # ネストされた下位セクションには踏み込まない（別 sections 行として処理されるため）
-    assert md('<div class="level-1"><p>親の本文</p>'
-              '<div class="section" id="HDR_Z"><h3>子見出し</h3><p>子の本文</p></div></div>') \
-        == "親の本文"
-
-    # 表セル内の '|' はエスケープする（列がずれて表が壊れるのを防ぐ）
-    assert md('<div class="level-1"><table><tr><th>用法</th><th>備考</th></tr>'
-              '<tr><td>1回1|2錠</td><td>朝|夕</td></tr></table></div>') \
-        == "| 用法 | 備考 |\n|---|---|\n| 1回1\\|2錠 | 朝\\|夕 |"
-
-    # セル内の改行は _clean_inline_text が空白に畳むので表は壊れない
-    assert md('<div class="level-1"><table><tr><th>投与量</th></tr>'
-              '<tr><td>1日\n  3回</td></tr></table></div>') \
-        == "| 投与量 |\n|---|\n| 1日 3回 |"
-
-    # ネストされたリストはインデントで階層を保つ
-    assert md('<div class="level-1"><ul><li>重大な副作用'
-              '<ul><li>横紋筋融解症</li><li>肝機能障害</li></ul></li>'
-              '<li>その他の副作用</li></ul></div>') \
-        == "- 重大な副作用\n    - 横紋筋融解症\n    - 肝機能障害\n- その他の副作用"
-
-    # ol の中の ol も同様。番号は各階層で1から振り直す
-    assert md('<div class="level-1"><ol><li>投与前<ol><li>血算</li><li>肝機能</li></ol></li>'
-              '<li>投与後</li></ol></div>') \
-        == "1. 投与前\n    1. 血算\n    2. 肝機能\n2. 投与後"
-
-    # 3階層。子リストの直後に続くテキスト(tail)は親項目の本文に残す
-    assert md('<div class="level-1"><ul><li>A<ul><li>B<ul><li>C</li></ul></li></ul>のとおり</li></ul></div>') \
-        == "- Aのとおり\n    - B\n        - C"
-
-    # 本文が空でも子リストがあれば親項目のマーカーを出す（階層が浅くならないように）
-    assert md('<div class="level-1"><ul><li><ul><li>子のみ</li></ul></li></ul></div>') \
-        == "- \n    - 子のみ"
-
-    # 空の li を飛ばしても ol の番号は飛ばさない（1始まりで詰める）
-    assert md('<div class="level-1"><ol><li></li><li>本文A</li><li>本文B</li></ol></div>') \
-        == "1. 本文A\n2. 本文B"
-
-    print("回帰テストOK: html_to_markdown")
-
-
-if __name__ == "__main__":
-    _run_tests()
