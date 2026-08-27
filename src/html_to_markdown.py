@@ -44,6 +44,18 @@ def _table_has_span(table_el) -> bool:
     return bool(table_el.xpath('.//*[@rowspan>1 or @colspan>1]'))
 
 
+def _escape_table_cell(text: str) -> str:
+    r"""セル内のパイプ記号をエスケープする。
+
+    添付文書の表には「A｜B」ではなく半角 `|` を区切りや範囲表記に使うセルが
+    実在し、そのまま出すとGFMがそこで列を分割して表全体の列数がずれる
+    （ヘッダ行の `---` 個数と本文行の列数が食い違い、表として描画されなくなる）。
+    改行は `_clean_inline_text()` が `\s+` を空白1つに畳む時点で消えているため、
+    ここで扱う必要はない。
+    """
+    return text.replace("|", r"\|")
+
+
 def _table_to_markdown(table_el) -> str:
     """rowspan/colspanを含まない単純な表をGFMパイプ表に変換する。
 
@@ -55,22 +67,58 @@ def _table_to_markdown(table_el) -> str:
     md_rows = []
     for i, tr in enumerate(rows):
         cells = [c for c in tr if c.tag in ("th", "td")]
-        texts = [_clean_inline_text(c) for c in cells]
+        texts = [_escape_table_cell(_clean_inline_text(c)) for c in cells]
         md_rows.append("| " + " | ".join(texts) + " |")
         if i == 0:
             md_rows.append("|" + "|".join(["---"] * len(texts)) + "|")
     return "\n".join(md_rows)
 
 
-def _list_to_markdown(list_el) -> str:
+# ネストリスト1階層あたりのインデント幅。CommonMark では、親マーカーが
+# '- '(内容カラム2) でも '1. '(内容カラム3) でも、4スペースは
+# 「内容カラム+4」に届かないためコードブロックにはならず、入れ子リストとして
+# 解釈される。どちらの親でも安全に使える唯一の固定幅なので4を採る。
+NESTED_LIST_INDENT = " " * 4
+
+
+def _li_own_text(li) -> str:
+    """li直下のネストリスト(ol/ul)を除いたインラインテキストを1行に平坦化する。
+
+    _clean_inline_text() をそのまま使うと子リストの項目まで親項目の本文に
+    吸い込まれて階層が消えるため、ここだけ ol/ul を飛ばして走査する。
+    インライン画像の扱いは _inline_parts() に委ねて共通化する。
+    """
+    parts = []
+    if li.text:
+        parts.append(li.text)
+    for child in li:
+        if not isinstance(child.tag, str):
+            continue  # コメント/PIノード
+        if child.tag not in ("ol", "ul"):
+            parts.extend(_inline_parts(child))
+        if child.tail:
+            parts.append(child.tail)
+    return re.sub(r"\s+", " ", "".join(parts)).strip()
+
+
+def _list_to_markdown(list_el, depth: int = 0) -> str:
+    """ol/ul をMarkdownリストへ変換する。ネストされたリストは再帰して字下げする。"""
     ordered = list_el.tag == "ol"
+    indent = NESTED_LIST_INDENT * depth
     lines = []
     for i, li in enumerate(list_el.findall("li"), 1):
-        text = _clean_inline_text(li)
-        if not text:
+        text = _li_own_text(li)
+        sublists = [c for c in li if isinstance(c.tag, str) and c.tag in ("ol", "ul")]
+        if not text and not sublists:
             continue
         prefix = f"{i}. " if ordered else "- "
-        lines.append(prefix + text)
+        # 本文が空でも子リストがあれば、親項目を空マーカーとして出さないと
+        # 階層が1段浅くなってしまう
+        lines.append(indent + prefix + text)
+        for sub in sublists:
+            sub_md = _list_to_markdown(sub, depth + 1)
+            if sub_md:
+                lines.append(sub_md)
     return "\n".join(lines)
 
 
@@ -199,6 +247,35 @@ def _run_tests():
     assert md('<div class="level-1"><p>親の本文</p>'
               '<div class="section" id="HDR_Z"><h3>子見出し</h3><p>子の本文</p></div></div>') \
         == "親の本文"
+
+    # 表セル内の '|' はエスケープする（列がずれて表が壊れるのを防ぐ）
+    assert md('<div class="level-1"><table><tr><th>用法</th><th>備考</th></tr>'
+              '<tr><td>1回1|2錠</td><td>朝|夕</td></tr></table></div>') \
+        == "| 用法 | 備考 |\n|---|---|\n| 1回1\\|2錠 | 朝\\|夕 |"
+
+    # セル内の改行は _clean_inline_text が空白に畳むので表は壊れない
+    assert md('<div class="level-1"><table><tr><th>投与量</th></tr>'
+              '<tr><td>1日\n  3回</td></tr></table></div>') \
+        == "| 投与量 |\n|---|\n| 1日 3回 |"
+
+    # ネストされたリストはインデントで階層を保つ
+    assert md('<div class="level-1"><ul><li>重大な副作用'
+              '<ul><li>横紋筋融解症</li><li>肝機能障害</li></ul></li>'
+              '<li>その他の副作用</li></ul></div>') \
+        == "- 重大な副作用\n    - 横紋筋融解症\n    - 肝機能障害\n- その他の副作用"
+
+    # ol の中の ol も同様。番号は各階層で1から振り直す
+    assert md('<div class="level-1"><ol><li>投与前<ol><li>血算</li><li>肝機能</li></ol></li>'
+              '<li>投与後</li></ol></div>') \
+        == "1. 投与前\n    1. 血算\n    2. 肝機能\n2. 投与後"
+
+    # 3階層。子リストの直後に続くテキスト(tail)は親項目の本文に残す
+    assert md('<div class="level-1"><ul><li>A<ul><li>B<ul><li>C</li></ul></li></ul>のとおり</li></ul></div>') \
+        == "- Aのとおり\n    - B\n        - C"
+
+    # 本文が空でも子リストがあれば親項目のマーカーを出す（階層が浅くならないように）
+    assert md('<div class="level-1"><ul><li><ul><li>子のみ</li></ul></li></ul></div>') \
+        == "- \n    - 子のみ"
 
     print("回帰テストOK: html_to_markdown")
 
