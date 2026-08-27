@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Canonical Scope
+
+`VISION.md` is the canonical spec: purpose, scope, non-scope, and the design
+principles in force. **Read it before proposing architectural changes.** In
+particular, the query layer (CLI / REST / MCP server / GUI) is explicitly
+out of scope — it belongs to a separate project, and this repository's only
+contract to it is schema stability. Resolution order when documents conflict:
+`VISION.md` > `PLAN.md` > code > `NOTES.md`; `LESSONS.md` records why past
+alternatives were rejected.
+
 ## Project Overview
 
 PMDA-SQLite converts Japanese pharmaceutical package insert data from PMDA (Pharmaceuticals and Medical Devices Agency) into a queryable SQLite database with a normalized schema.
