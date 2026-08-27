@@ -244,6 +244,25 @@ stays visible that those values are brand names, not generic names.
 
 ## Critical Implementation Details
 
+### Regulatory classification codes
+
+`specifications.regulatory_classification` is built from
+`RegulatoryClassificationCode` values, and the code→label table is **read from
+`vendor/pmda-styles/include/RegulatoryClassification.xml`**
+(`xml_to_db.load_regulatory_codes`), not hardcoded — it is the same file
+PMDA's own stylesheet reads via `document()`
+(`preview_ja.xsl:14` → `preview-include.xsl:647`, which selects
+`Selection/Item[@id]/Label[@type='preview']/Lang[@xml:lang='ja']`).
+
+The hardcoded table this replaced was wrong for everything except codes 1 and
+2: 11–15 were shifted by two (a peritoneal dialysis solution came out as
+特定生物由来製品 instead of 処方箋医薬品 — 5,540 rows), and 3–10 / 16–19 had no
+entry at all, leaking `コード9`-style placeholders into the DB. **Do not
+re-derive this mapping by hand.** Codes 11 and 12 both map to 処方箋医薬品
+(only the footnote wording differs); duplicate labels are collapsed.
+An unknown code still yields `コード{n}` but now prints a warning once per
+process, so a future vendor update that adds codes is visible.
+
 ### Deduplication Logic (changed from the deprecated pipeline)
 
 The deprecated `json_to_db.py:find_or_create_medicine()` grouped by
