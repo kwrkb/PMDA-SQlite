@@ -168,9 +168,12 @@ Full investigation: `docs/XSL_SPIKE.md`.
    6KB→2.6ms (0.44 ms/KB), 143KB→199ms (1.42), 257KB→4,770ms (19.0),
    **579KB→25,428ms (45.0)**. The hot spot is the `ns:CommentRef` template at
    `vendor/pmda-styles/include/preview-include.xsl:2056-2062`, which runs three
-   full-document `//ns:Comment` scans **per `CommentRef` element**, each with an
-   `ancestor::ns:Lang` walk on every hit; the stylesheet defines no `xsl:key`
-   anywhere. Cost tracks Comment count (0→7→25→208 across the rows above).
+   full-document `//ns:Comment` scans **per *resolvable* `CommentRef`**, each
+   with an `ancestor::ns:Lang` walk on every hit. A dangling reference costs
+   only the first scan: the `xsl:when` guard evaluates to false and control
+   falls to `xsl:otherwise`, which emits `（注釈参照切れ）` without running the
+   `for-each`. The stylesheet defines no `xsl:key` anywhere. Cost tracks
+   Comment count (0→7→25→208 across the rows above).
    Consequences: 200KB+ files are 5.45% of the corpus but ~80% of transform
    cost, and this is why the loader parallelizes with `multiprocessing` instead
    of running serially. Naively rewriting those scans as `key()` **changes the
