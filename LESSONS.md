@@ -223,6 +223,30 @@ if文だけに頼らず、挿入関数自体が「新規かどうか」を返す
   それは「一般名の概念がない製剤群」ではなく `extract_generic_name()` の
   抽出漏れを疑うべきサイン（`load_all()` のサマリで検知できる）
 
+## 2026-08-28: バッチコミットは SAVEPOINT だけでは成立しない（BEGIN が必須）
+
+- 却下した案: `store_result()` を `SAVEPOINT rec` … `RELEASE rec` で包み、
+  `load_all()` が BATCH_SIZE 件ごとに `conn.commit()` する形だけでバッチ化が
+  済んだとみなす案。1件の失敗が他を巻き込まない保証は確かにこれで満たせるので、
+  行数の一致（新旧で medicines/sections/本文長がすべて同数）とロールバックの
+  分離を確認した時点で完了と判断しかけた
+- 決め手: 一時DBで計測すると `store_result()` 直後に
+  `conn.in_transaction == False` で、`conn.commit()` を呼ぶ前に別コネクション
+  から行が見えていた。SQLite は「BEGIN ではなく SAVEPOINT で開始された
+  トランザクション」の最外殻 savepoint を RELEASE した時点でコミットする。
+  Python の sqlite3 は DML の前にしか暗黙の BEGIN を出さないため、
+  トランザクションを開始していたのは SAVEPOINT 自身だった。つまり
+  BATCH_SIZE=500 も末尾の `conn.commit()` も no-op で、狙っていた約18,000回の
+  fsync 削減は1回も効いていなかった
+- 同じミスを防ぐルール: 「コミットが遅延している」ことは行数では検証できない。
+  1件ずつコミットされていても最終的な行数は同じになるからで、実際
+  `test_failed_record_is_rolled_back_without_losing_the_batch` は欠陥のある
+  実装でもパスしていた。`conn.in_transaction` か「別コネクションからまだ
+  見えないこと」を直接 assert する
+  （`test_batch_is_not_committed_until_the_caller_commits`）
+- 覆す条件: `isolation_level=None`（autocommit）に移行して BEGIN を自前で
+  管理する形にした場合。その時は SAVEPOINT の入れ子関係を測り直すこと
+
 ## 関連ドキュメント
 
 - [[xsl-fizzy-puddle-plan]] スパイク検証・本実装のプラン全文
