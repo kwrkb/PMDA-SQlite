@@ -54,7 +54,7 @@ $env:PYTHONPATH = "src"
 .venv\Scripts\python.exe src\db_setup.py
 .venv\Scripts\python.exe src\db_setup.py --recreate  # Drop + recreate (required over a pre-sections DB)
 .venv\Scripts\python.exe src\xml_to_db.py 10      # Test load (10 directories)
-.venv\Scripts\python.exe src\xml_to_db.py          # Full load (~28 min, parallelized)
+.venv\Scripts\python.exe src\xml_to_db.py          # Full load (~26 min, parallelized)
 ```
 
 `db_setup.py` refuses to run over a database built by the pre-`sections`
@@ -162,10 +162,19 @@ Full investigation: `docs/XSL_SPIKE.md`.
    `_inline_parts()` / `_clean_inline_text()`, which substitutes
    `![図](<file>)` in place. Any new branch that assembles inline text must use
    them rather than `itertext()`.
-4. **XSLT transform time is superlinear in document size** (17KB→18ms,
-   311KB→10s in spike measurements; root cause is `//` and `@id=$id` lookups
-   inside the vendor stylesheet). This is why the loader parallelizes with
-   `multiprocessing` instead of running serially.
+4. **XSLT transform time is superlinear in document size** — roughly
+   quadratic in element count (log-log slope ≈ 2.1). Measured 2026-08-27 on the
+   17,747-file snapshot, 3 runs each, best-of; reproducible to 1.4%:
+   6KB→2.6ms (0.44 ms/KB), 143KB→199ms (1.42), 257KB→4,770ms (19.0),
+   **579KB→25,428ms (45.0)**. The hot spot is the `ns:CommentRef` template at
+   `vendor/pmda-styles/include/preview-include.xsl:2056-2062`, which runs three
+   full-document `//ns:Comment` scans **per `CommentRef` element**, each with an
+   `ancestor::ns:Lang` walk on every hit; the stylesheet defines no `xsl:key`
+   anywhere. Cost tracks Comment count (0→7→25→208 across the rows above).
+   Consequences: 200KB+ files are 5.45% of the corpus but ~80% of transform
+   cost, and this is why the loader parallelizes with `multiprocessing` instead
+   of running serially. Naively rewriting those scans as `key()` **changes the
+   output HTML** and does not speed anything up — see issue #2 before trying it.
 
 ### Figure images
 

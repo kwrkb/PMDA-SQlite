@@ -163,7 +163,7 @@ data/
 $env:PYTHONPATH = "src"
 .venv\Scripts\python.exe src\db_setup.py
 .venv\Scripts\python.exe src\xml_to_db.py 10   # テスト用（10ディレクトリのみ）
-.venv\Scripts\python.exe src\xml_to_db.py      # 全件ロード（約28分。XSLT変換を並列実行）
+.venv\Scripts\python.exe src\xml_to_db.py      # 全件ロード（約26分。XSLT変換を並列実行）
 ```
 
 旧スキーマ（本文を `medicines` の35カラムに持っていた版）のDBが残っている場合、
