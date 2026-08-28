@@ -57,12 +57,42 @@ def _inline_parts(el):
         href = (el.get("href") or "").strip()
         text = "".join(_inline_content(el)).strip()
         if href:
-            yield f"[{text}]({href})" if text else href
+            yield f"[{_escape_link_text(text)}]({_link_destination(href)})" if text else href
         else:
             yield text
         return
 
     yield from _inline_content(el)
+
+
+# リンクラベル内でリンク記法を壊す文字。`]` はラベルの終端として解釈され、
+# `\` は直後の1文字をエスケープしてしまう。
+_LINK_TEXT_META_RE = re.compile(r"([\\\[\]])")
+
+# リンク先を裸で書けない文字。`(` `)` は宛先の対応括弧、空白は宛先の終端になる。
+_LINK_DEST_NEEDS_BRACKETS_RE = re.compile(r"[\s()<>]")
+
+
+def _escape_link_text(text: str) -> str:
+    r"""リンクラベル内の `[` `]` `\` をエスケープする。
+
+    現行コーパス（17,747ファイル / <Link> 484件）では該当0件だが、XSDは
+    ラベルにもURLにも任意の文字列を許す。壊れたときの症状が「リンク先が
+    黙って切り詰められる」で、`| ` を `\|` にエスケープしている表セルと
+    同じクラスの問題なので、同じように入力を信用せず処理する。
+    """
+    return _LINK_TEXT_META_RE.sub(r"\\\1", text)
+
+
+def _link_destination(href: str) -> str:
+    """リンク先をMarkdownの宛先として安全な形にする。
+
+    `(` `)` や空白を含むURLは `<...>` で囲む（CommonMark の pointy-bracket
+    destination）。その中に置けない `<` `>` だけはパーセントエンコードする。
+    """
+    if not _LINK_DEST_NEEDS_BRACKETS_RE.search(href):
+        return href
+    return "<" + href.replace("<", "%3C").replace(">", "%3E") + ">"
 
 
 def _inline_content(el):
