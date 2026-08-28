@@ -197,12 +197,7 @@ PMDA-SQlite/
 │   ├── html_to_markdown.py     # HTML→Markdown変換
 │   ├── xml_to_db.py            # メインローダー（並列処理）
 │   ├── parse_product_name.py  # 製品名解析（規格抽出）
-│   ├── check_db_integrity.py  # DB整合性チェック
-│   ├── xml_to_json.py         # [非推奨] 旧JSON中間パイプライン
-│   ├── validate_json.py       # [非推奨]
-│   ├── json_to_db.py          # [非推奨] 旧ローダー（抽出ロジックはxml_to_db.pyへ移植済み）
-│   ├── parse_xml.py           # [非推奨]
-│   └── load_data.py           # [非推奨]
+│   └── check_db_integrity.py  # DB整合性チェック
 ├── docs/
 │   ├── XSL_SPIKE.md            # XSL方式のスパイク検証結果
 │   ├── V2_ISSUES.md            # 開発メモ・修正履歴

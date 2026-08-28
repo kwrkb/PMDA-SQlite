@@ -11,9 +11,6 @@ from typing import Optional
 # データベースファイルパス
 DB_PATH = 'data/pmda.sqlite'
 
-# JSON中間データディレクトリ
-JSON_DIR = 'data/json'
-
 # PMDAデータの基本ディレクトリ（環境変数で上書き可能。
 # ダウンロード先が data/PMDAraw/ と異なる場合に使う）
 PMDA_RAW_DIR = os.environ.get('PMDA_RAW_DIR', 'data/PMDAraw')
