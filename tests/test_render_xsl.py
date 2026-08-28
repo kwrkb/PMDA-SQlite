@@ -7,6 +7,7 @@
 import pytest
 from lxml import html
 
+from html_to_markdown import convert_section_body
 from render_xsl import (
     HEADER_REF_BROKEN_TEXT,
     _build_header_no_map,
@@ -92,6 +93,39 @@ def test_end_to_end_levels(rendered_root):
     by_id = _by_id(extract_sections(rendered_root))
     assert by_id["HDR_UseInSpecificPopulations"]["level"] == "1"
     assert by_id["HDR_UseInPregnant"]["level"] == "2"
+
+
+# --- Issue #28: 本文ラッパ(level-*)を出さないセクション ---
+
+def _by_heading(sections, heading):
+    return next(s for s in sections if s["heading"] == heading)
+
+
+def test_section_without_level_wrapper_falls_back_to_the_section_div(rendered_root):
+    """preview-include.xsl:1852-1867 の ns:Manufacturer だけは <h3> の直後に
+    <p> を直接置き、他のセクションが必ず持つ level-* のラッパ div を出さない。
+    body_el を level-* に限定していたころは、この本文が None になっていた。"""
+    section = _by_heading(extract_sections(rendered_root), "製造販売元")
+    assert section["body_el"] is not None
+    assert section["body_el"].get("class") == "section"
+
+
+def test_end_to_end_manufacturer_body_is_not_lost(rendered_root):
+    """「26. 製造販売業者等」配下の会社名と住所が body_md に入ること。
+    medicines.manufacturer は先頭1社の Name しか持たないので、ここが空だと
+    住所も2社目以降もDBのどこにも残らない。"""
+    section = _by_heading(extract_sections(rendered_root), "製造販売元")
+    body_md = convert_section_body(section["body_el"])
+    assert "テスト製薬株式会社" in body_md
+    assert "東京都千代田区1-1-1" in body_md
+
+
+def test_end_to_end_item_numbers_are_not_doubled(rendered_root):
+    """XSLが本文に書いた項番(2.1)に、コンバータ側の連番(1.)を重ねない。"""
+    section = _by_heading(extract_sections(rendered_root), "禁忌（次の患者には投与しないこと）")
+    body_md = convert_section_body(section["body_el"])
+    assert body_md.startswith("- 2.1 ")
+    assert "1. 2.1" not in body_md
 
 
 # --- Issue #23: 本文側の項番にも補正をかける（正しい値は壊さない） ---

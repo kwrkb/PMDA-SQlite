@@ -457,7 +457,14 @@ def insert_medicine(cur: sqlite3.Cursor, medicine_data: dict) -> Tuple[Optional[
         return None, False
 
 
-def insert_specification(cur: sqlite3.Cursor, medicine_id: int, spec: dict) -> bool:
+def insert_specification(cur: sqlite3.Cursor, medicine_id: int, spec: dict) -> Tuple[bool, int]:
+    """specifications を1行挿入する。戻り値は (SQLが通ったか, 実際に挿入された行数)。
+
+    2つを分けるのは、`INSERT OR IGNORE` が UNIQUE(medicine_id, product_name) で
+    無視した行も「成功」だからである。呼び出し側のロールバック判定は前者を、
+    件数報告は後者を使う。件数のほうでロールバックを判定すると、再実行時
+    （is_new=False で既存の規格が全部無視される）に正常な行まで巻き戻る。
+    """
     try:
         cur.execute("""
             INSERT OR IGNORE INTO specifications (
@@ -471,10 +478,10 @@ def insert_specification(cur: sqlite3.Cursor, medicine_id: int, spec: dict) -> b
             spec.get("regulatory_classification"), spec.get("storage"), spec.get("shelf_life"),
             spec.get("marketing_date"), spec.get("composition"),
         ))
-        return True
+        return True, cur.rowcount
     except sqlite3.IntegrityError as e:
         print(f"  ✗ specifications挿入エラー: {e}")
-        return False
+        return False, 0
 
 
 def insert_interactions(cur: sqlite3.Cursor, medicine_id: int, interactions: List[dict]):
@@ -540,11 +547,14 @@ def store_result(conn: sqlite3.Connection, result: dict) -> Tuple[bool, str]:
             _undo_record(cur)
             return False, "medicines挿入に失敗"
 
-        spec_count = 0
+        spec_ok = 0      # SQLが通った件数。1件も通らなければこのレコードは捨てる
+        spec_added = 0   # 実際に新規挿入された行数。報告用
         for spec in result["specs"]:
-            if insert_specification(cur, medicine_id, spec):
-                spec_count += 1
-        if spec_count == 0:
+            ok, added = insert_specification(cur, medicine_id, spec)
+            if ok:
+                spec_ok += 1
+                spec_added += added
+        if spec_ok == 0:
             _undo_record(cur)
             return False, "規格情報の登録に失敗"
 
@@ -555,7 +565,8 @@ def store_result(conn: sqlite3.Connection, result: dict) -> Tuple[bool, str]:
             insert_sections(cur, medicine_id, result["sections"])
 
         cur.execute(f"RELEASE {SAVEPOINT_NAME}")
-        return True, (f"medicine_id={medicine_id}, is_new={is_new}, specs={spec_count}, "
+        return True, (f"medicine_id={medicine_id}, is_new={is_new}, "
+                      f"specs={spec_added}/{len(result['specs'])}, "
                       f"interactions={len(result['interactions'])}, sections={len(result['sections'])}")
     except Exception as e:
         _undo_record(cur)
@@ -570,7 +581,11 @@ def iter_xml_paths(xml_source_dir: str, limit: Optional[int] = None) -> List[str
         d for d in os.listdir(xml_source_dir)
         if os.path.isdir(os.path.join(xml_source_dir, d))
     ])
-    if limit:
+    # `if limit:` にすると limit=0 が「制限なし」に化けて全件ロードが始まる。
+    # 負値も subdirs[:-N] として黙って末尾を切り落とすので、両方ここで弾く。
+    if limit is not None:
+        if limit < 0:
+            raise ValueError(f"limit は0以上で指定してください: {limit}")
         subdirs = subdirs[:limit]
 
     paths = []
@@ -777,6 +792,10 @@ if __name__ == "__main__":
             limit = int(sys.argv[1])
         except ValueError:
             print("エラー: 引数は整数で指定してください")
+            print("使用例: python src/xml_to_db.py 10")
+            sys.exit(1)
+        if limit < 0:
+            print(f"エラー: 引数は0以上で指定してください: {limit}")
             print("使用例: python src/xml_to_db.py 10")
             sys.exit(1)
 
