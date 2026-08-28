@@ -4,6 +4,7 @@
 実際にPMDA公式XSLTへ通すエンドツーエンドテスト。
 """
 
+import pytest
 from lxml import html
 
 from render_xsl import (
@@ -91,3 +92,37 @@ def test_end_to_end_levels(rendered_root):
     by_id = _by_id(extract_sections(rendered_root))
     assert by_id["HDR_UseInSpecificPopulations"]["level"] == "1"
     assert by_id["HDR_UseInPregnant"]["level"] == "2"
+
+
+# --- Issue #23: 本文側の項番にも補正をかける（正しい値は壊さない） ---
+
+@pytest.mark.parametrize("untouched", [
+    "0.000001",         # 濃度。そのまま正しい値
+    "0.0000002",
+    "99.99999",
+    "19.2000007629395",  # 19.2 の単精度表現。1桁に丸めてよいとは限らない
+    "25.3999996185303",
+    "24.5799999237061",
+    "9.17000007629395",  # 1桁に丸めると 9.2 になり、値が変わってしまう
+])
+def test_fix_float_section_no_leaves_non_double_artifacts_alone(untouched):
+    """本文には見た目の似た別種の値が混ざっている。倍精度で小数1桁を表した
+    ときの誤差（差が1e-15程度）だけを補正し、単精度アーティファクトや
+    通常の数値には触らないこと。"""
+    assert fix_float_section_no(untouched) == untouched
+
+
+def test_fix_float_section_no_handles_item_numbers_in_body_text():
+    assert fix_float_section_no("9.699999999999999.1 小児等を対象とした…") \
+        == "9.7.1 小児等を対象とした…"
+
+
+def test_end_to_end_body_text_has_no_float_artifact(rendered_root):
+    """minimal.xml の 9.7（小児等）は公式XSLが 9.699999999999999.1 を出す箇所。"""
+    from html_to_markdown import convert_section_body
+
+    bodies = [convert_section_body(s["body_el"]) for s in extract_sections(rendered_root)]
+    joined = "\n".join(bodies)
+    assert "99999999" not in joined
+    assert "000000000" not in joined
+    assert "9.7.1" in joined

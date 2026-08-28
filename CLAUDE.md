@@ -170,7 +170,16 @@ Full investigation: `docs/XSL_SPIKE.md`.
    `UseInSpecificPopulations` render as `9.199999999999999` etc. (IEEE754
    artifact in the stylesheet's own arithmetic). `fix_float_section_no()`
    rounds these — **must round, not truncate** (`9.199999999999999` → `9.2`,
-   not `9.1`).
+   not `9.1`). The same artifact appears in *body* text as item numbers
+   (`9.699999999999999.1 …`), so `transform_xml()` calls `fix_float_artifacts()`
+   over the whole tree, not just the `Header-data` map.
+   **The rule is deliberately narrow**: the token must have 12+ decimals *and*
+   sit within `1e-9` of its 1-decimal rounding. Body text also carries
+   *single*-precision artifacts that look similar but must not be touched —
+   `19.2000007629395` (= float32 of 19.2, off by 7.6e-7) and especially
+   `9.17000007629395`, which rounding to one decimal would turn into `9.2`.
+   Plain values like `0.000001` (a concentration) are below the digit floor.
+   See `tests/test_render_xsl.py` before loosening either condition.
 2. **Cross-reference text is filled in by JavaScript, not by the XSLT**:
    `<a class="HeaderRef" href="#HDR_XXX">` is emitted empty; the visible
    `［10.2 参照］` is inserted at page load by `vendor/pmda-styles/js/preview.js`,
