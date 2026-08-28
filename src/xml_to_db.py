@@ -37,7 +37,7 @@ from config import (
     VENDOR_XSL_PATH,
     get_xml_source_dir,
 )
-from db_setup import rebuild_fts_index
+from db_setup import ensure_fts_index
 from html_to_markdown import convert_section_body
 from parse_product_name import parse_product_name
 from render_xsl import extract_sections, load_xslt, transform_xml
@@ -726,7 +726,7 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
         if log_path:
             print(f"全件のエラーログ: {log_path}")
 
-    rebuild_fts_index()
+    ensure_fts_index()
     print_database_stats()
 
 

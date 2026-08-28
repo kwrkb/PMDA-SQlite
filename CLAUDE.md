@@ -346,6 +346,35 @@ so **queries shorter than 3 characters return nothing** even when the term is
 present (`頻尿`, 2 chars, will not match; `副作用`, 3 chars, works). UI/query
 code searching CJK text should fall back to `LIKE` for 1–2 character input.
 
+### FTS5 index builds crash intermittently — build it in a child process
+
+Writing this corpus into the trigram index (810,095 sections / 103MB of body
+text) **kills the process at random** on SQLite 3.53.1 + Python 3.14: Windows
+access violation (`0xC0000005`) or plain segfault. Measured 2026-08-28 — five
+runs of identical code died at 280k, 310k, 670k and 710k rows and completed
+twice. A native abort cannot be caught by `try`/`except`, and because the
+loader is normally read through a pipe (`| tail`), the shell reports the
+**pipe's** exit code 0 — so the run looks successful and leaves a DB whose
+`sections_fts` is empty or truncated.
+
+Consequences baked into `db_setup.py`:
+
+- `rebuild_fts_index(resume=…)` inserts in `FTS_REBUILD_BATCH` (10,000) row
+  transactions. This is **not** for speed — a single `INSERT … SELECT` over the
+  whole table dies every time, and so does a single `DELETE FROM sections_fts`
+  over a populated index (which is why a full rebuild does `DROP TABLE` +
+  recreate rather than `DELETE`).
+- `ensure_fts_index()` runs `db_setup.py --rebuild-fts` as a **child process**
+  and re-invokes it with `--resume` on non-zero exit, up to
+  `FTS_REBUILD_MAX_ATTEMPTS`. Committed batches survive, so one crash costs at
+  most one batch. `xml_to_db.load_all()` calls this, never
+  `rebuild_fts_index()` directly.
+- To finish a partial index by hand:
+  `python src/db_setup.py --rebuild-fts --resume`.
+
+`check_db_integrity.py` reports FTS coverage against `sections` — check it
+after any load rather than trusting the loader's exit code.
+
 ## Important Constraints
 
 ### Medical Data Disclaimer
