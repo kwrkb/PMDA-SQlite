@@ -1,7 +1,6 @@
-import sqlite3
 import os
+import sqlite3
 import sys
-from datetime import datetime
 
 from config import DB_PATH
 
