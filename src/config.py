@@ -8,8 +8,10 @@ import os
 from glob import glob
 from typing import Optional
 
-# データベースファイルパス
-DB_PATH = 'data/pmda.sqlite'
+# データベースファイルパス（環境変数で上書き可能）。
+# テストや試験ロードが本番DBを壊さずに db_setup.py / xml_to_db.py を
+# 走らせられるようにするための逃げ道。
+DB_PATH = os.environ.get('PMDA_DB_PATH', 'data/pmda.sqlite')
 
 # ロード時のエラーログ出力先（xml_to_db.py が失敗一覧を書き出す）
 LOG_DIR = 'logs'

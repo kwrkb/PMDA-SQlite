@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+# src/ はパッケージ化していない素のモジュール置き場なので、pytest 側でパスを通す
+# （実行時は PYTHONPATH=src を使う運用と揃える）。
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E/F: pycodestyle + pyflakes、I: import順、B: bugbear。
+# UP（新しい構文への置き換え）は typing.List -> list 等で既存コード全体を
+# 書き換えることになるので、このPRのスコープからは外している。
+select = ["E", "F", "I", "B"]

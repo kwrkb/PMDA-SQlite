@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  テスト用の最小添付文書XML（実データではなく手書きの合成データ）。
+
+  vendor/pmda-styles のXSLTを通したエンドツーエンド回帰テストに使う。
+  data/PMDAraw/ を持たないCI環境でも回せるよう、PMDA公式スキーマの構造だけを
+  手で書き起こしている。含めている要素はテスト目的から逆算したもの:
+
+  - UseInSpecificPopulations: 公式XSLの浮動小数点バグ（9.199999999999999）を
+    実際に踏ませる（render_xsl.fix_float_section_no の回帰）
+  - HeaderRef: preview.js 相当の参照解決（render_xsl.resolve_header_refs）
+  - OrderedList のネスト: html_to_markdown の入れ子リスト字下げ
+  - DetailBrandName 2つ / RegulatoryClassification / Interactions:
+    xml_to_db のタグ抽出
+-->
+<PackIns version="1.0" xmlKind="Packins" drugType="Medicine" containedLang="ja"
+         xmlns="http://info.pmda.go.jp/namespace/prescription_drugs/package_insert/1.0">
+  <PackageInsertNo>9999999XX9999_1_01</PackageInsertNo>
+  <CompanyIdentifier>999999</CompanyIdentifier>
+  <DateOfPreparationOrRevision>
+    <PreparationOrRevision id="今回">
+      <YearMonth>2026-08</YearMonth>
+      <Version>
+        <Lang xml:lang="ja">第3版</Lang>
+      </Version>
+    </PreparationOrRevision>
+  </DateOfPreparationOrRevision>
+  <Sccj>
+    <SccjNo>871119</SccjNo>
+  </Sccj>
+  <ApprovalEtc>
+    <DetailBrandName id="BRD_Drug1">
+      <ApprovalBrandName>
+        <Lang xml:lang="ja">テスト薬錠10mg</Lang>
+      </ApprovalBrandName>
+      <BrandCode>
+        <YJCode>1119999F1010</YJCode>
+      </BrandCode>
+      <ApprovalAndLicenseNo>
+        <ApprovalNo>99999AMX99999</ApprovalNo>
+      </ApprovalAndLicenseNo>
+      <StartingDateOfMarketing>2020-04</StartingDateOfMarketing>
+      <Storage>
+        <StorageMethod>
+          <Lang xml:lang="ja">室温保存</Lang>
+        </StorageMethod>
+        <ShelfLife>
+          <Lang xml:lang="ja">36ヶ月</Lang>
+        </ShelfLife>
+      </Storage>
+      <RegulatoryClassification>
+        <RegulatoryClassificationCodeAndNote>
+          <RegulatoryClassificationCode>1</RegulatoryClassificationCode>
+        </RegulatoryClassificationCodeAndNote>
+        <RegulatoryClassificationCodeAndNote>
+          <RegulatoryClassificationCode>2</RegulatoryClassificationCode>
+        </RegulatoryClassificationCodeAndNote>
+      </RegulatoryClassification>
+    </DetailBrandName>
+    <DetailBrandName id="BRD_Drug2">
+      <ApprovalBrandName>
+        <Lang xml:lang="ja">テスト薬錠50mg</Lang>
+      </ApprovalBrandName>
+      <BrandCode>
+        <YJCode>1119999F2016</YJCode>
+      </BrandCode>
+    </DetailBrandName>
+  </ApprovalEtc>
+  <GenericName heading="fixing" id="HDR_GenericName">
+    <Detail>
+      <Lang xml:lang="ja">テスト塩酸塩水和物</Lang>
+    </Detail>
+  </GenericName>
+  <ContraIndications heading="fixing" id="HDR_ContraIndications">
+    <OrderedList numberContinued="false">
+      <Item heading="free" id="HDR_TEST_ContraIndications_1">
+        <Detail>
+          <Lang xml:lang="ja">本剤の成分に対し過敏症の既往歴のある患者</Lang>
+        </Detail>
+      </Item>
+      <Item heading="free" id="HDR_TEST_ContraIndications_2">
+        <Detail>
+          <Lang xml:lang="ja">妊婦又は妊娠している可能性のある女性<HeaderRef ref="HDR_UseInPregnant"/></Lang>
+        </Detail>
+      </Item>
+    </OrderedList>
+  </ContraIndications>
+  <IndicationsOrEfficacy wordingPatternOfIndications="1" heading="fixing" id="HDR_IndicationsOrEfficacy">
+    <Detail>
+      <Lang xml:lang="ja">高血圧症</Lang>
+    </Detail>
+  </IndicationsOrEfficacy>
+  <InfoDoseAdmin wordingPatternOfDoseAdmin="1" heading="fixing" id="HDR_InfoDoseAdmin">
+    <DoseAdmin>
+      <Detail>
+        <Lang xml:lang="ja">通常、成人には1日1回10mgを経口投与する。</Lang>
+      </Detail>
+    </DoseAdmin>
+  </InfoDoseAdmin>
+  <ImportantPrecautions heading="fixing" id="HDR_ImportantPrecautions">
+    <OrderedList numberContinued="false">
+      <Item heading="free" id="HDR_TEST_ImportantPrecautions_1">
+        <Detail>
+          <Lang xml:lang="ja">投与開始前に次の項目を確認すること。</Lang>
+        </Detail>
+        <OrderedList numberContinued="false">
+          <Item heading="free" id="HDR_TEST_ImportantPrecautions_1_1">
+            <Detail>
+              <Lang xml:lang="ja">血圧</Lang>
+            </Detail>
+          </Item>
+          <Item heading="free" id="HDR_TEST_ImportantPrecautions_1_2">
+            <Detail>
+              <Lang xml:lang="ja">腎機能</Lang>
+            </Detail>
+          </Item>
+        </OrderedList>
+      </Item>
+    </OrderedList>
+  </ImportantPrecautions>
+  <Interactions heading="fixing" id="HDR_Interactions">
+    <ContraIndicatedCombinations heading="fixing" id="HDR_ContraIndicatedCombinations">
+      <Drug>
+        <DrugName>
+          <Lang xml:lang="ja">テスト禁忌薬</Lang>
+        </DrugName>
+        <ClinSymptomsAndMeasures>
+          <Lang xml:lang="ja">血圧が過度に低下するおそれがある。</Lang>
+        </ClinSymptomsAndMeasures>
+        <MechanismAndRiskFactors>
+          <Lang xml:lang="ja">降圧作用が相加的に増強される。</Lang>
+        </MechanismAndRiskFactors>
+      </Drug>
+    </ContraIndicatedCombinations>
+    <PrecautionsForCombinations heading="fixing" id="HDR_PrecautionsForCombinations">
+      <Drug>
+        <DrugName>
+          <Lang xml:lang="ja">テスト注意薬</Lang>
+        </DrugName>
+        <ClinSymptomsAndMeasures>
+          <Lang xml:lang="ja">本剤の血中濃度が上昇することがある。</Lang>
+        </ClinSymptomsAndMeasures>
+      </Drug>
+    </PrecautionsForCombinations>
+  </Interactions>
+  <UseInSpecificPopulations heading="fixing" id="HDR_UseInSpecificPopulations">
+    <UseInPregnant heading="fixing" id="HDR_UseInPregnant">
+      <OrderedList numberContinued="false">
+        <Item heading="free" id="HDR_TEST_UseInPregnant_1">
+          <Detail>
+            <Lang xml:lang="ja">妊婦又は妊娠している可能性のある女性には投与しないこと。</Lang>
+          </Detail>
+        </Item>
+      </OrderedList>
+    </UseInPregnant>
+    <UseInNursing heading="fixing" id="HDR_UseInNursing">
+      <OrderedList numberContinued="false">
+        <Item heading="free" id="HDR_TEST_UseInNursing_1">
+          <Detail>
+            <Lang xml:lang="ja">授乳しないことが望ましい。</Lang>
+          </Detail>
+        </Item>
+      </OrderedList>
+    </UseInNursing>
+    <PediatricUse heading="fixing" id="HDR_PediatricUse">
+      <OrderedList numberContinued="false">
+        <Item heading="free" id="HDR_TEST_PediatricUse_1">
+          <Detail>
+            <Lang xml:lang="ja">小児等を対象とした臨床試験は実施していない。</Lang>
+          </Detail>
+        </Item>
+      </OrderedList>
+    </PediatricUse>
+  </UseInSpecificPopulations>
+  <AdverseEvents heading="fixing" id="HDR_AdverseEvents">
+    <CommonPrecautionsForAdverse>
+      <Lang xml:lang="ja">次の副作用があらわれることがあるので、観察を十分に行うこと。</Lang>
+    </CommonPrecautionsForAdverse>
+    <SeriousAdverseEvents heading="fixing" id="HDR_SeriousAdverseEvents">
+      <SeriousAdverse>
+        <OrderedList numberContinued="false">
+          <Item heading="free" id="HDR_TEST_SeriousAdverseEvents_1">
+            <Header>
+              <Lang xml:lang="ja">横紋筋融解症（頻度不明）</Lang>
+            </Header>
+            <Detail>
+              <Lang xml:lang="ja">筋肉痛、脱力感、CK上昇があらわれることがある。</Lang>
+            </Detail>
+          </Item>
+        </OrderedList>
+      </SeriousAdverse>
+    </SeriousAdverseEvents>
+  </AdverseEvents>
+  <NameAddressManufact>
+    <Manufacturer>
+      <TypeOfIndustry>
+        <Lang xml:lang="ja">製造販売元</Lang>
+      </TypeOfIndustry>
+      <Name>
+        <Lang xml:lang="ja">テスト製薬株式会社</Lang>
+      </Name>
+      <Address>
+        <Lang xml:lang="ja">東京都千代田区1-1-1</Lang>
+      </Address>
+    </Manufacturer>
+  </NameAddressManufact>
+</PackIns>

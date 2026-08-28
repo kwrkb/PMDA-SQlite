@@ -14,7 +14,6 @@ from lxml import etree, html
 
 from config import VENDOR_XSL_PATH
 
-
 # --- 落とし穴1: PMDA公式XSLの浮動小数点バグ ---
 #
 # UseInSpecificPopulations 配下の項番計算が IEEE754 の丸め誤差を起こし、
@@ -158,36 +157,12 @@ def extract_sections(root) -> List[dict]:
     return sections
 
 
-def _run_tests():
-    # 落とし穴1の回帰テスト
-    assert fix_float_section_no("9.199999999999999") == "9.2", "四捨五入が壊れています(9.1になってはいけない)"
-    assert fix_float_section_no("9.699999999999999") == "9.7"
-    assert fix_float_section_no("9.800000000000001") == "9.8"
-    assert fix_float_section_no("3.1") == "3.1"
-    print("回帰テストOK: fix_float_section_no")
-
-    # 落とし穴2の回帰テスト: HeaderRefの参照テキスト解決（preview.js相当）
-    doc = html.fromstring(
-        '<div><div class="contents"><p>出血のおそれがある。'
-        '[<a class="HeaderRef" href="#HDR_A"></a>]'
-        '[<a class="HeaderRef" href="#HDR_MISSING"></a>]</p></div>'
-        '<div id="Header-data">'
-        '<div data-header-id="HDR_A">9.199999999999999</div></div></div>'
-    )
-    resolve_header_refs(doc, _build_header_no_map(doc))
-    refs = [a.text for a in doc.xpath('//a[@class="HeaderRef"]')]
-    assert refs[0] == "［9.2 参照］", f"参照テキストが解決されていません: {refs[0]!r}"
-    assert refs[1] == HEADER_REF_BROKEN_TEXT, f"参照切れの扱いが不正: {refs[1]!r}"
-    print("回帰テストOK: resolve_header_refs")
-
-
 if __name__ == "__main__":
     import sys
 
-    _run_tests()
-
     if len(sys.argv) < 2:
         print("使用例: python src/render_xsl.py <XMLファイルパス>")
+        print("（自動テストは pytest tests/test_render_xsl.py にあります）")
         sys.exit(0)
 
     xslt = load_xslt()
