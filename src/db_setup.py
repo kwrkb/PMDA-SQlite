@@ -240,7 +240,15 @@ def setup_database(recreate: bool = False):
         FOREIGN KEY (medicine_id) REFERENCES medicines(id) ON DELETE CASCADE
     )
     ''')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sections_medicine_id ON sections(medicine_id)')
+    # 代表クエリは
+    #   SELECT ... FROM sections WHERE medicine_id = ? ORDER BY ord
+    # なので (medicine_id, ord) の複合インデックスにする。medicine_id 単独だと
+    # ORDER BY ord が別途ソートになる。先頭カラムが medicine_id なので、
+    # medicine_id だけの検索も同じインデックスで賄える＝
+    # idx_sections_medicine_id は冗長になり、80万行に対する二重インデックスの
+    # 容量と挿入コストだけが残るため削除する。
+    cursor.execute('DROP INDEX IF EXISTS idx_sections_medicine_id')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sections_medicine_ord ON sections(medicine_id, ord)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_sections_xml_id ON sections(xml_id)')
 
     # 全文検索用仮想テーブル (FTS5)
