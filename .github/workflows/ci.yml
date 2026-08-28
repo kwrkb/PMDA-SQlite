@@ -37,6 +37,14 @@ jobs:
             requirements.txt
             requirements-dev.txt
       - run: pip install -r requirements-dev.txt
+      # PMDA配布資材は再配布不可のため未同梱。テスト前に取得する。固定キーで
+      # キャッシュしてPMDAへの再ダウンロードを避ける（資材を更新したくなったら
+      # キーの v1 を上げる）。
+      - uses: actions/cache@v4
+        with:
+          path: vendor/pmda-styles
+          key: pmda-styles-v1
+      - run: python src/fetch_vendor.py
       # テストは data/PMDAraw/ を必要としない。本文レンダリングの検証には
-      # tests/fixtures/minimal.xml と vendor/pmda-styles/（コミット済み）を使う。
+      # tests/fixtures/minimal.xml と取得した vendor/pmda-styles/ を使う。
       - run: pytest

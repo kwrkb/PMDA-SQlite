@@ -143,6 +143,9 @@ cd PMDA-SQlite
 
 uv venv
 uv pip install -r requirements.txt
+
+# PMDA公式XSLTスタイルシート（再配布不可のため同梱していない）を取得
+.venv\Scripts\python.exe src\fetch_vendor.py
 ```
 
 ### 2. PMDAデータの準備
@@ -186,11 +189,13 @@ $env:PYTHONPATH = "src"
 ```
 PMDA-SQlite/
 ├── vendor/
-│   ├── pmda-styles/            # PMDA公式XSLTスタイルシート（コミット済み）
-│   └── pmda-xsd/                # PMDA公式XMLスキーマ（参照用）
+│   ├── README.md               # 取得元・更新手順（資材本体はコミットされない）
+│   ├── pmda-styles/            # PMDA公式XSLTスタイルシート（src/fetch_vendor.py で取得）
+│   └── pmda-xsd/                # PMDA公式XMLスキーマ（参照用・手動取得）
 ├── data/
 │   └── pmda.sqlite            # 生成されるデータベース（gitignore）
 ├── src/
+│   ├── fetch_vendor.py         # PMDA配布資材（styles.zip）の取得
 │   ├── config.py               # 設定（DBパス、XSLパス、PMDA_RAW_DIR環境変数）
 │   ├── db_setup.py             # スキーマ作成（sections正規化、trigram FTS、互換VIEW）
 │   ├── render_xsl.py           # XSLT変換＋セクション分割＋浮動小数点補正
@@ -225,8 +230,8 @@ uv pip install -r requirements-dev.txt --python .venv\Scripts\python.exe
 ```
 
 テストは `data/PMDAraw/` を必要としません。本文レンダリングの検証は
-`tests/fixtures/minimal.xml`（手書きの合成XML）とコミット済みの
-`vendor/pmda-styles/` を通して行い、DBのテストは `tmp_path` 上の一時SQLiteを
+`tests/fixtures/minimal.xml`（手書きの合成XML）と、`src/fetch_vendor.py` で
+取得した `vendor/pmda-styles/` を通して行い（テスト前に要取得）、DBのテストは `tmp_path` 上の一時SQLiteを
 使うため `data/pmda.sqlite` には触れません。試験ロードで本番DBを避けたい場合は
 環境変数 `PMDA_DB_PATH` でDBパスを上書きできます。
 
@@ -240,6 +245,7 @@ CI（`.github/workflows/ci.yml`）は push / PR ごとに Python 3.10〜3.14 で
 ## ライセンス
 
 - 本リポジトリのコードとドキュメントは [MIT License](LICENSE) です。
-- `vendor/pmda-styles/`（PMDA公式XSLTスタイルシート一式）と `vendor/pmda-xsd/` は
-  PMDAが配布する資材であり、MITライセンスの対象外です。取得元と取得日は
-  `vendor/pmda-styles/SOURCE.md` を参照してください。
+- `vendor/` 配下に展開されるPMDA配布資材（XSLTスタイルシート・XMLスキーマ）は
+  MITライセンスの対象外であり、再配布条件が明確でないためリポジトリには
+  同梱していません。`src/fetch_vendor.py` が配布元から取得します。
+  取得元と更新手順は [vendor/README.md](vendor/README.md) を参照してください。

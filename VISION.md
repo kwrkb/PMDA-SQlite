@@ -27,7 +27,7 @@ PMDA（医薬品医療機器総合機構）が公開する電子添文XMLを、*
    内容の類似による統合を行わない
 3. **構造化フィールドはXMLタグから直接抽出**する。本文Markdownからの再パースに頼らない
 4. **vendorのXSLTは改変しない**を既定とする。改変する場合は
-   `vendor/pmda-styles/SOURCE.md` の更新手順への追随コストを引き受ける
+   `vendor/README.md` の更新手順への追随コストを引き受ける
 5. **外部に対する契約はスキーマのみ**。別プロジェクトの参照層が依存してよいのは
    `medicines` / `specifications` / `interactions` / `sections` /
    `medicines_legacy`(VIEW) / `sections_fts`(trigram) の定義であり、

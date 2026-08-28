@@ -31,3 +31,7 @@ load_log.txt
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# PMDA配布資材（再配布条件が不明確なため同梱しない。src/fetch_vendor.py で取得）
+vendor/pmda-styles/
+vendor/pmda-xsd/

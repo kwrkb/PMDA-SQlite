@@ -29,6 +29,9 @@ Multiple products share one package insert: one `medicines` row, many `specifica
 Development happens on **Windows 11 native (not WSL), in PowerShell**, against the in-repo `.venv` managed by `uv`. Every command below is PowerShell with `\` separators; never rewrite them as POSIX (`PYTHONPATH=src python …`, `/mnt/c/…`, `source .venv/bin/activate`), and never install with bare `pip`. `$env:PYTHONPATH` is **not** needed: every entry point lives in `src\`, so Python puts `src\` on `sys.path` as the script directory — including the `--rebuild-fts` child process, which `db_setup.py` spawns as `[sys.executable, <abspath of db_setup.py>, …]`.
 
 ```powershell
+# One-time setup: fetch the PMDA stylesheet (not committed; loader and tests need it).
+.venv\Scripts\python.exe src\fetch_vendor.py
+
 # Build / rebuild. The DB is a point-in-time snapshot; --recreate is also the refresh path.
 $env:PMDA_RAW_DIR = "C:\path\to\pmda_all_sgml_xml_YYYYMMDD_parent_dir"  # only if not under data\PMDAraw\
 .venv\Scripts\python.exe src\db_setup.py
@@ -53,7 +56,7 @@ uv pip install -r requirements-dev.txt   # uv picks up the .venv in the repo roo
 
 **Run the whole suite — not the tests you think are affected — after touching a lookup/catalog table or a shared path.** Each such table sits in a different module from the tests that pin it: the `RegulatoryClassification` code→label mapping (`xml_to_db.load_regulatory_codes`) and `LEGACY_COLUMN_MAP` (`db_setup.py`, which drives the `medicines_legacy` VIEW) are covered in `tests/test_xml_to_db.py`, `DOSAGE_FORM_MAPPING` (`parse_product_name.py`) in `tests/test_parse_product_name.py`, and `INVALID_NAME_VALUES` (`xml_to_db.py`) only indirectly, through the `extract_generic_name` fallback cases.
 
-Tests need no real data: body rendering goes through `tests/fixtures/minimal.xml` plus the committed `vendor/pmda-styles/`, and DB tests build a throwaway SQLite under `tmp_path` (`$env:PMDA_DB_PATH` overrides the DB path for a trial load). CI (`.github/workflows/ci.yml`) runs `ruff check` + `pytest` on Python 3.10–3.14 for every push to `main` and every PR.
+Tests need no real data: body rendering goes through `tests/fixtures/minimal.xml` plus `vendor/pmda-styles/` (fetched by `src\fetch_vendor.py`; run it once before the first test run), and DB tests build a throwaway SQLite under `tmp_path` (`$env:PMDA_DB_PATH` overrides the DB path for a trial load). CI (`.github/workflows/ci.yml`) runs `ruff check` + `pytest` on Python 3.10–3.14 for every push to `main` and every PR.
 
 ## Loader behaviour
 

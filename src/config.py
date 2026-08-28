@@ -23,8 +23,8 @@ PMDA_RAW_DIR = os.environ.get('PMDA_RAW_DIR', 'data/PMDAraw')
 # XMLソースディレクトリのパターン
 XML_DIR_PATTERN = 'pmda_all_sgml_xml_*'
 
-# PMDA公式XSLTスタイルシート（vendor/pmda-styles/ にコミット済み。
-# 取得元・更新手順は vendor/pmda-styles/SOURCE.md を参照）
+# PMDA公式XSLTスタイルシート（再配布不可のため未同梱。src/fetch_vendor.py で
+# 取得する。取得元・更新手順は vendor/README.md を参照）
 VENDOR_XSL_PATH = 'vendor/pmda-styles/preview_ja.xsl'
 
 # 規制区分コードの公式ルックアップ表。XSLTが document() で読むのと同じファイルを

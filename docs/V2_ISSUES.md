@@ -15,7 +15,7 @@
 
 ```
 vendor/
-├── pmda-styles/            # PMDA公式XSLTスタイルシート（コミット済み）
+├── pmda-styles/            # PMDA公式XSLTスタイルシート（src/fetch_vendor.py で取得）
 └── pmda-xsd/                # PMDA公式XMLスキーマ（参照用）
 
 src/
