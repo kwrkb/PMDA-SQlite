@@ -189,6 +189,17 @@ def extract_sections(root) -> List[dict]:
             if child.tag == "div" and "level-" in (child.get("class") or ""):
                 body_el = child
                 break
+        else:
+            # ラッパ div を出さないテンプレートがひとつだけある。
+            # preview-include.xsl:1852-1867 の ns:Manufacturer は、汎用の
+            # Section-BLK（同38-101行）と違って <h3> の直後に <p>会社名 <p>住所 を
+            # セクション div の直下に置く。ここで None のままにすると
+            # 「26. 製造販売業者等」配下（製造販売元・販売元・発売元…）の本文が
+            # 全文書で空になる。medicines.manufacturer は先頭1社の Name しか
+            # 持たないので、住所も2社目以降もDBのどこにも残らなくなる。
+            # セクション div 自身を渡してよい: convert_section_body() は h3 を
+            # 読み飛ばし、入れ子の div.section にも踏み込まない。
+            body_el = div
 
         ordinal += 1
         sections.append({
