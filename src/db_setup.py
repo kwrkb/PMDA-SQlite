@@ -127,8 +127,11 @@ def setup_database(recreate: bool = False):
                   旧スキーマのDBを検出した場合はこれを指定しない限り中断する。
     """
 
-    # ディレクトリの存在確認
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    # ディレクトリの存在確認。DB_PATH がファイル名だけ（PMDA_DB_PATH=trial.sqlite 等）の
+    # ときは dirname が '' になり、os.makedirs('') は FileNotFoundError を投げる。
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -394,13 +397,19 @@ def ensure_fts_index(max_attempts: int = FTS_REBUILD_MAX_ATTEMPTS) -> bool:
     そこで構築は必ず子プロセス (`db_setup.py --rebuild-fts`) で行い、異常終了したら
     resume で呼び直す。コミット済みバッチは残るので、1回のクラッシュで失うのは
     高々1バッチ分。
+
+    子には PMDA_DB_PATH を明示的に渡す。子は別プロセスなので config.DB_PATH を
+    自分で解決し直し、テストが `monkeypatch.setattr(db_setup, "DB_PATH", tmp)` で
+    差し替えたパスは伝わらない。渡さないと、一時DBを使っているつもりの実行が
+    本番 data/pmda.sqlite の sections_fts を DROP して作り直してしまう。
     """
     script = os.path.abspath(__file__)
+    env = {**os.environ, 'PMDA_DB_PATH': os.path.abspath(DB_PATH)}
     for attempt in range(1, max_attempts + 1):
         cmd = [sys.executable, script, '--rebuild-fts']
         if attempt > 1:
             cmd.append('--resume')
-        result = subprocess.run(cmd)
+        result = subprocess.run(cmd, env=env)
         if result.returncode == 0:
             return True
         print(
