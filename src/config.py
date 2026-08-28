@@ -27,6 +27,10 @@ XML_DIR_PATTERN = 'pmda_all_sgml_xml_*'
 # 取得元・更新手順は vendor/pmda-styles/SOURCE.md を参照）
 VENDOR_XSL_PATH = 'vendor/pmda-styles/preview_ja.xsl'
 
+# 規制区分コードの公式ルックアップ表。XSLTが document() で読むのと同じファイルを
+# xml_to_db.py も読み、コード→ラベルの対応を推測しないようにする（Issue #22）。
+VENDOR_REGCLASS_PATH = 'vendor/pmda-styles/include/RegulatoryClassification.xml'
+
 
 def get_xml_source_dir(base_dir: str = PMDA_RAW_DIR) -> Optional[str]:
     """
