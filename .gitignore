@@ -28,3 +28,6 @@ load_log.txt
 
 # Large PDF files
 *.pdf
+
+# Claude Code local settings
+.claude/settings.local.json

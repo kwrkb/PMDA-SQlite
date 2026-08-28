@@ -236,3 +236,10 @@ CI（`.github/workflows/ci.yml`）は push / PR ごとに Python 3.10〜3.14 で
 ## 注意事項
 - 本データはPMDAの公開情報を加工したものです。
 - 医療上の判断には、必ず公式サイトの最新情報を参照してください。
+
+## ライセンス
+
+- 本リポジトリのコードとドキュメントは [MIT License](LICENSE) です。
+- `vendor/pmda-styles/`（PMDA公式XSLTスタイルシート一式）と `vendor/pmda-xsd/` は
+  PMDAが配布する資材であり、MITライセンスの対象外です。取得元と取得日は
+  `vendor/pmda-styles/SOURCE.md` を参照してください。
