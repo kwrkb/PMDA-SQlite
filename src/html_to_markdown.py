@@ -16,14 +16,57 @@ INLINE_TAGS = frozenset((
     "a", "span", "sup", "sub", "br", "em", "b", "i", "u", "strong", "font", "img",
 ))
 
+# 平坦化すると値そのものが変わるので、タグを残したままMarkdownへ通す要素。
+# 10<sup>5</sup> を平坦化すると 105 になり、桁が黙って変わる。
+SUPERSCRIPT_TAGS = frozenset(("sup", "sub"))
+
 
 def _inline_parts(el):
-    """インライン要素配下のテキスト片を出現順に列挙する。"""
+    """インライン要素配下のテキスト片を出現順に列挙する。
+
+    「テキストを持たない要素」と「平坦化すると意味が変わる要素」はここで
+    Markdown/HTML の記法に置き換える。分岐を増やすときは必ずこの関数に足すこと
+    （LESSONS.md 2026-07-31: 平坦化は1箇所に集約する）。
+    """
     if el.tag == "img":
         # img はテキストを持たないので itertext() では消える。Markdown画像記法にする。
         yield f"![図]({_fix_img_src(el.get('src', ''))})"
         return
 
+    if el.tag == "br":
+        # <br> も同じくテキストを持たない。XML側の <enter/> 由来
+        # (preview-include.xsl:2016-2018)。単に落とすと前後の語が区切りなしで
+        # 連結され、'アセトアミノフェン' + '無水カフェイン' が実在しない1語になる。
+        # 空白1つにしておけば _clean_inline_text() の「1行に畳む」契約も壊さない。
+        yield " "
+        return
+
+    if el.tag in SUPERSCRIPT_TAGS:
+        # 上付き・下付きは平坦化すると数値の意味が変わる（10<sup>5</sup> が 105）。
+        # rowspan表を生HTMLで埋めているのと同じ方針でタグごと残す。
+        yield f"<{el.tag}>"
+        yield from _inline_content(el)
+        yield f"</{el.tag}>"
+        return
+
+    if el.tag == "a" and "Link" in (el.get("class") or "").split():
+        # class="Link" は外部URLへのリンク(preview-include.xsl:2010-2014)。
+        # テキストだけ拾うと参照先が本文から消える。
+        # class="HeaderRef" は文書内アンカーで、resolve_header_refs() が
+        # '［9.5 参照］' を埋めた本文そのものなのでここでは扱わない。
+        href = (el.get("href") or "").strip()
+        text = "".join(_inline_content(el)).strip()
+        if href:
+            yield f"[{text}]({href})" if text else href
+        else:
+            yield text
+        return
+
+    yield from _inline_content(el)
+
+
+def _inline_content(el):
+    """el 自身のテキストと、子要素＋その tail を出現順に列挙する。"""
     if el.text:
         yield el.text
     for child in el:
@@ -73,10 +116,9 @@ def _table_to_markdown(table_el) -> str:
     return "\n".join(md_rows)
 
 
-# ネストリスト1階層あたりのインデント幅。CommonMark では、親マーカーが
-# '- '(内容カラム2) でも '1. '(内容カラム3) でも、4スペースは
-# 「内容カラム+4」に届かないためコードブロックにはならず、入れ子リストとして
-# 解釈される。どちらの親でも安全に使える唯一の固定幅なので4を採る。
+# ネストリスト1階層あたりのインデント幅。親マーカーは常に '- '（内容カラム2）
+# なので、CommonMark では2スペースあれば入れ子リストになる。4スペースでも
+# 「内容カラム+4」= 6 に届かずコードブロックにはならないため、視認性を優先して4を採る。
 NESTED_LIST_INDENT = " " * 4
 
 
@@ -101,24 +143,27 @@ def _li_own_text(li) -> str:
 
 
 def _list_to_markdown(list_el, depth: int = 0) -> str:
-    """ol/ul をMarkdownリストへ変換する。ネストされたリストは再帰して字下げする。"""
-    ordered = list_el.tag == "ol"
+    """ol/ul をMarkdownリストへ変換する。ネストされたリストは再帰して字下げする。
+
+    **ol にも連番を振らない。** PMDA公式XSLは <ol> 配下の li に、項番そのものを
+    <span class="section_header">2.1 </span> として本文テキストで書き込み
+    （preview-include.xsl:2361-2365。親が OrderedList なら必ず出力される）、
+    preview.css:100/132 の `list-style-type: none` でブラウザ側のマーカーを
+    消している。つまり公式サイトの表示は「2.1 本剤の成分に…」であって
+    番号は1つしか出ない。ここで別の連番を振ると `1. 2.1 本剤の成分に…` と
+    実在しない項番が本文に混入する。ol/ul とも箇条書きマーカーにして、
+    項番は本文テキスト側の値だけを残す。
+    """
     indent = NESTED_LIST_INDENT * depth
     lines = []
-    # 出力した項目だけを数える。enumerate をそのまま使うと、スキップした空の li
-    # の分だけ番号が飛び（<ol><li></li><li>本文</li></ol> が '2. 本文' になる）、
-    # 本文中の相互参照と項番が食い違う。
-    number = 0
     for li in list_el.findall("li"):
         text = _li_own_text(li)
         sublists = [c for c in li if isinstance(c.tag, str) and c.tag in ("ol", "ul")]
         if not text and not sublists:
             continue
-        number += 1
-        prefix = f"{number}. " if ordered else "- "
         # 本文が空でも子リストがあれば、親項目を空マーカーとして出さないと
         # 階層が1段浅くなってしまう
-        lines.append(indent + prefix + text)
+        lines.append(indent + "- " + text)
         for sub in sublists:
             sub_md = _list_to_markdown(sub, depth + 1)
             if sub_md:
@@ -139,19 +184,25 @@ def convert_section_body(body_el) -> str:
     子孫に div.section（ネストされた下位セクション）が現れた場合はそこで
     打ち切る。下位セクションは独立した sections 行として別途処理されるため、
     ここで内容を重複して取り込まない。
+
+    ただしこの打ち切りは**ルート要素には適用しない**。render_xsl.extract_sections()
+    は level-* のラッパ div を出さないセクション（ns:Manufacturer）に対して
+    セクション div 自身を body_el として渡してくるので、ルートにも同じ判定を
+    かけると即座に打ち切られて本文が空になる。通常の body_el は level-* div で
+    class に "section" を含まないため、この例外で既存の挙動は変わらない。
     """
     if body_el is None:
         return ""
 
     parts = []
 
-    def walk(node):
+    def walk(node, is_root=False):
         tag = node.tag if isinstance(node.tag, str) else None
         if tag is None:
             return
 
         cls = node.get("class") or ""
-        if tag == "div" and "section" in cls.split():
+        if not is_root and tag == "div" and "section" in cls.split():
             return  # ネストされた下位セクションには踏み込まない
 
         if tag == "h3":
@@ -213,5 +264,5 @@ def convert_section_body(body_el) -> str:
                 buf.append(child.tail)
         flush()
 
-    walk(body_el)
+    walk(body_el, is_root=True)
     return "\n\n".join(p for p in parts if p)
