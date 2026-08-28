@@ -20,11 +20,33 @@ from config import VENDOR_XSL_PATH
 # 「9.199999999999999」のような項番がそのままHTMLに出力される。
 # 切り捨てだと 9.199999999999999 → 9.1 という誤った値になるため、
 # 四捨五入（round）で丸める必要がある。
-FLOAT_ARTIFACT_RE = re.compile(r"\d+\.\d*(?:0{5,}\d?|9{5,}\d?)")
+#
+# 本文にも同じ補正をかけるにあたり（Issue #23）、対象を「小数1桁の値に対する
+# 倍精度の丸め誤差」だけに絞る必要がある。本文には見た目が似ていて中身の違う
+# 数値が混ざっているため:
+#
+#   9.199999999999999  項番の誤差。真の値は 9.2、差は約 1e-15   → 補正する
+#   19.2000007629395   19.2 の**単精度**表現。差は約 7.6e-7      → 触らない
+#   9.17000007629395   9.17 の単精度表現。1桁に丸めると 9.2 になり値が変わる
+#   0.000001           濃度としてそのまま正しい値
+#
+# そこで「小数12桁以上」かつ「小数1桁に丸めた値との差が 1e-9 未満」を条件にする。
+# 前者で通常の数値を、後者で単精度アーティファクトを除外できる。単精度側は
+# 正しい丸め先が1桁とは限らず（9.17）、別の問題として扱う。
+FLOAT_ARTIFACT_RE = re.compile(r"\d+\.\d{12,}")
+
+# 倍精度で1桁の値を表したときの誤差の上限。実データの4パターンはいずれも
+# 差が 1e-15 程度で、単精度アーティファクト（1e-7程度）とは3桁以上離れている。
+_ARTIFACT_TOLERANCE = 1e-9
 
 
 def _round_token(m: "re.Match[str]") -> str:
-    return f"{round(float(m.group(0)), 1):g}"
+    token = m.group(0)
+    value = float(token)
+    rounded = round(value, 1)
+    if abs(rounded - value) >= _ARTIFACT_TOLERANCE:
+        return token  # 単精度アーティファクトや、本当に桁数の多い値
+    return f"{rounded:g}"
 
 
 def fix_float_section_no(s: str) -> str:
@@ -34,8 +56,28 @@ def fix_float_section_no(s: str) -> str:
         '9.699999999999999' -> '9.7'
         '9.800000000000001' -> '9.8'
         '3.1' -> '3.1' (誤差がない値はそのまま)
+        '0.000001' -> '0.000001' (本文中の正しい値には触らない)
     """
     return FLOAT_ARTIFACT_RE.sub(_round_token, s)
+
+
+def fix_float_artifacts(root) -> None:
+    """HTMLツリー全体のテキストから浮動小数点誤差を取り除く（破壊的）。
+
+    fix_float_section_no() は長らく <div id="Header-data"> の項番マップにしか
+    適用されておらず、本文テキストに出てくる項番（'9.699999999999999.1 …'）は
+    そのまま sections.body_md へ入っていた（Issue #23。17,747件スナップショットで
+    7,518セクション / 4,550医薬品が該当）。見出しの項番は 9.7 なのに直下の本文は
+    9.699999999999999.1 という食い違いが起き、全文検索でも当たらなくなる。
+    XSLのバグは本文側にも同じように出るので、両方を補正する。
+    """
+    for el in root.iter():
+        if not isinstance(el.tag, str):
+            continue  # コメント/PIノード
+        if el.text and "." in el.text:
+            el.text = fix_float_section_no(el.text)
+        if el.tail and "." in el.tail:
+            el.tail = fix_float_section_no(el.tail)
 
 
 # --- 落とし穴2: 相互参照リンクの本文がJS側で埋められる ---
@@ -90,6 +132,9 @@ def transform_xml(xslt: etree.XSLT, xml_path: str):
     result = xslt(xml_doc)
     html_bytes = etree.tostring(result, method="html", encoding="utf-8")
     root = html.fromstring(html_bytes)
+    # 参照解決より先に補正する。resolve_header_refs が埋める '［9.7 参照］' の
+    # 項番は Header-data 由来（既に補正済み）なので、後段で二度触らない。
+    fix_float_artifacts(root)
     resolve_header_refs(root, _build_header_no_map(root))
     return root
 
