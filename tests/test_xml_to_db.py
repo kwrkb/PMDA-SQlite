@@ -95,6 +95,31 @@ def test_elements_skips_comment_nodes():
     assert [etree.QName(e).localname for e in xml_to_db._elements(root)] == ["A"]
 
 
+# --- 入力の絞り込み ---
+
+def _make_xml_dirs(root, count: int):
+    for i in range(count):
+        d = root / f"dir{i:02d}"
+        d.mkdir()
+        (d / "a.xml").write_text("<x/>", encoding="utf-8")
+    return root
+
+
+def test_iter_xml_paths_limit_zero_means_zero_not_everything(tmp_path):
+    """Issue #28: `if limit:` だと limit=0 が「制限なし」に化けて全件ロードが始まる。"""
+    root = _make_xml_dirs(tmp_path, 3)
+    assert xml_to_db.iter_xml_paths(str(root), limit=0) == []
+    assert len(xml_to_db.iter_xml_paths(str(root), limit=2)) == 2
+    assert len(xml_to_db.iter_xml_paths(str(root), limit=None)) == 3
+
+
+def test_iter_xml_paths_rejects_a_negative_limit(tmp_path):
+    """負値は subdirs[:-N] として黙って末尾を切り落とすので弾く。"""
+    root = _make_xml_dirs(tmp_path, 3)
+    with pytest.raises(ValueError):
+        xml_to_db.iter_xml_paths(str(root), limit=-1)
+
+
 # --- エラーログ ---
 
 def test_write_error_log_writes_all_rows(tmp_path):
@@ -172,6 +197,31 @@ def test_reloading_same_package_insert_no_does_not_duplicate(temp_db, conn):
     assert "is_new=False" in message
     assert _counts(temp_db) == {"medicines": 1, "specifications": 1,
                                 "interactions": 1, "sections": 3}
+
+
+def test_spec_count_reports_rows_actually_inserted(temp_db, conn):
+    """Issue #28: INSERT OR IGNORE が無視した行も成功として数えていたため、
+    同一 product_name が重複する文書で specs の報告値が過大になっていた。"""
+    result = _result("A")
+    result["specs"] = [result["specs"][0], dict(result["specs"][0])]  # 同じ product_name が2件
+    ok, message = store_result(conn, result)
+    conn.commit()
+
+    assert ok
+    assert "specs=1/2" in message
+    assert _counts(temp_db)["specifications"] == 1
+
+
+def test_reloading_reports_zero_new_specs_but_is_not_rolled_back(temp_db, conn):
+    """再実行では全 spec が IGNORE されるが、それはロールバック理由にならない。
+    挿入行数でロールバックを判定すると、正常な既存レコードまで巻き戻る。"""
+    store_result(conn, _result("A"))
+    ok, message = store_result(conn, _result("A"))
+    conn.commit()
+
+    assert ok
+    assert "specs=0/1" in message
+    assert _counts(temp_db)["medicines"] == 1
 
 
 def test_distinct_package_insert_no_creates_distinct_medicines(temp_db, conn):
