@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import subprocess
 import sys
 
 from config import DB_PATH
@@ -58,6 +59,20 @@ DROP_ORDER = [
     ("TABLE", "specifications"),
     ("TABLE", "medicines"),
 ]
+
+# 全文検索用仮想テーブル (FTS5) のDDL。create_database() と rebuild_fts_index() の
+# 両方から使うので定数にしてある（再構築は DELETE ではなく作り直しで行うため）。
+# トークナイザは trigram にする。既定の unicode61 は日本語を分かち書きできず
+# MATCH '高血圧' のような検索が実質機能しないため（XSL_SPIKE.md 参照）。
+SECTIONS_FTS_DDL = '''
+CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5(
+    heading,
+    body_md,
+    section_id UNINDEXED,
+    medicine_id UNINDEXED,
+    tokenize='trigram'
+)
+'''
 
 
 def _has_unique_index(cursor, table: str, column: str) -> bool:
@@ -254,15 +269,7 @@ def setup_database(recreate: bool = False):
     # トークナイザは trigram にする。既定の unicode61 は日本語を分かち書きできず
     # MATCH '高血圧' のような検索が実質機能しないため（XSL_SPIKE.md 参照）。
     try:
-        cursor.execute('''
-        CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5(
-            heading,
-            body_md,
-            section_id UNINDEXED,
-            medicine_id UNINDEXED,
-            tokenize='trigram'
-        )
-        ''')
+        cursor.execute(SECTIONS_FTS_DDL)
         print("FTS5 table (trigram) created successfully.")
     except Exception as e:
         print(f"Skipping FTS5 table creation: {e}")
@@ -290,43 +297,138 @@ def setup_database(recreate: bool = False):
     print("Database setup completed successfully.")
 
 
-def rebuild_fts_index():
-    """
-    FTS5インデックスを再構築します。
+# FTS5再構築の1トランザクションあたり件数。
+# フルコーパス（sections 81万行 / 本文103MB）を1本の INSERT ... SELECT で流すと
+# trigram の書き込みバッファが肥大してSQLiteが **segfault** する（Python 3.14 /
+# SQLite 3.53.1 で再現）。例外ではなくプロセス即死なので try/except では拾えず、
+# パイプ越しだと exit code 0 に見えてFTSだけ空のDBが出来上がる。
+# バッチごとにcommitしてバッファを解放すれば同じ81万行が問題なく入る。
+# 同じ理由で、投入済みインデックスの破棄も `DELETE FROM sections_fts` ではなく
+# DROP + 再作成で行う（81万行の一括DELETEも同様にsegfaultし、そのときは
+# 78万行が残った中途半端なインデックスがDBに残る）。
+FTS_REBUILD_BATCH = 10000
 
-    sections と medicines を結合し、全文検索用のインデックスを作成します。
+# FTS5構築の子プロセスを最大何回まで呼び直すか（ensure_fts_index() のdocstring参照）。
+FTS_REBUILD_MAX_ATTEMPTS = 10
+
+
+def rebuild_fts_index(resume: bool = False):
+    """
+    FTS5インデックスを（再）構築します。
+
+    sections を section_id 昇順に FTS_REBUILD_BATCH 件ずつ投入し、バッチごとに
+    commitします。`resume=False` なら仮想テーブルを作り直してから、`resume=True`
+    なら既に入っている最大 section_id の続きから投入します。
+
+    途中でプロセスが落ちてもコミット済みの分は残るので、同じ関数を resume=True で
+    呼び直せば続きから再開できます（ensure_fts_index() がこれを使う）。
     """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    print("Rebuilding FTS5 index...")
-
     try:
-        # 既存データを削除
-        cursor.execute('DELETE FROM sections_fts')
+        if resume:
+            cursor.execute(SECTIONS_FTS_DDL)  # 落ちた位置によっては存在しない
+            conn.commit()
+            last_id = cursor.execute(
+                'SELECT COALESCE(MAX(section_id), 0) FROM sections_fts'
+            ).fetchone()[0]
+            inserted = cursor.execute('SELECT COUNT(*) FROM sections_fts').fetchone()[0]
+            print(f"Resuming FTS5 index build from section_id > {last_id} ({inserted:,} done)...")
+        else:
+            # 既存インデックスの破棄は DELETE ではなく作り直しで行う（定数のコメント参照）
+            cursor.execute('DROP TABLE IF EXISTS sections_fts')
+            cursor.execute(SECTIONS_FTS_DDL)
+            conn.commit()
+            last_id = 0
+            inserted = 0
+            print("Rebuilding FTS5 index...")
 
-        cursor.execute('''
-            INSERT INTO sections_fts (heading, body_md, section_id, medicine_id)
-            SELECT s.heading, s.body_md, s.id, s.medicine_id
-            FROM sections s
-        ''')
+        while True:
+            rows = cursor.execute(
+                '''
+                SELECT s.id, s.medicine_id, s.heading, s.body_md
+                FROM sections s
+                WHERE s.id > ?
+                ORDER BY s.id
+                LIMIT ?
+                ''',
+                (last_id, FTS_REBUILD_BATCH),
+            ).fetchall()
+            if not rows:
+                break
 
-        inserted = cursor.rowcount
-        conn.commit()
+            cursor.executemany(
+                '''
+                INSERT INTO sections_fts (heading, body_md, section_id, medicine_id)
+                VALUES (?, ?, ?, ?)
+                ''',
+                [(heading, body_md, sid, mid) for sid, mid, heading, body_md in rows],
+            )
+            conn.commit()
+
+            last_id = rows[-1][0]
+            inserted += len(rows)
+
         print(f"FTS5 index rebuilt: {inserted:,} entries")
+        return True
 
     except Exception as e:
         print(f"FTS5 rebuild failed: {e}")
         conn.rollback()
+        return False
     finally:
         conn.close()
 
 
+def ensure_fts_index(max_attempts: int = FTS_REBUILD_MAX_ATTEMPTS) -> bool:
+    """
+    FTS5インデックスを、子プロセス越しに完成するまで組み直します。
+
+    SQLite 3.53.1 の FTS5 trigram 書き込みは、このコーパス規模だと **確率的に
+    プロセスごと落ちる**（Windows access violation / segfault）。落ちる位置は毎回
+    違い、無事に完走することもある。ネイティブの異常終了なので同一プロセス内の
+    try/except では拾えず、`| tail` 越しだと exit code 0 に見えて
+    「FTSだけ空のDB」が黙って出来上がる。
+
+    そこで構築は必ず子プロセス (`db_setup.py --rebuild-fts`) で行い、異常終了したら
+    resume で呼び直す。コミット済みバッチは残るので、1回のクラッシュで失うのは
+    高々1バッチ分。
+    """
+    script = os.path.abspath(__file__)
+    for attempt in range(1, max_attempts + 1):
+        cmd = [sys.executable, script, '--rebuild-fts']
+        if attempt > 1:
+            cmd.append('--resume')
+        result = subprocess.run(cmd)
+        if result.returncode == 0:
+            return True
+        print(
+            f"FTS5インデックス構築が異常終了しました "
+            f"(exit={result.returncode}, 試行 {attempt}/{max_attempts})。続きから再開します。"
+        )
+
+    print(
+        f"FTS5インデックスを {max_attempts} 回試しても完成できませんでした。"
+        f"`python src/db_setup.py --rebuild-fts --resume` で手動再開してください。"
+    )
+    return False
+
+
 if __name__ == "__main__":
+    KNOWN_ARGS = {"--recreate", "--rebuild-fts", "--resume"}
     args = sys.argv[1:]
-    unknown = [a for a in args if a != "--recreate"]
+    unknown = [a for a in args if a not in KNOWN_ARGS]
     if unknown:
         print(f"エラー: 未知の引数: {' '.join(unknown)}")
         print("使用例: python src/db_setup.py [--recreate]")
+        print("        python src/db_setup.py --rebuild-fts [--resume]")
         sys.exit(1)
+
+    if "--rebuild-fts" in args:
+        # ensure_fts_index() がこのモードを子プロセスとして呼ぶ。
+        # 手で叩く場合は --resume で途中から再開できる。
+        ok = rebuild_fts_index(resume="--resume" in args)
+        sys.exit(0 if ok else 1)
+
     setup_database(recreate="--recreate" in args)
