@@ -142,6 +142,28 @@ def test_external_link_keeps_its_url():
         == "詳細は[こちら](https://example.com/doc)を参照。"
 
 
+def test_link_label_escapes_markdown_metacharacters():
+    r"""ラベル中の `]` はリンク記法の終端として解釈され、以降のURLが捨てられる。
+    現行コーパスには該当が無いが、XSDはラベルに任意の文字列を許す。"""
+    assert md('<div class="level-1"><p>'
+              '<a class="Link" href="https://example.com/x">A]B</a></p></div>') \
+        == r"[A\]B](https://example.com/x)"
+
+
+def test_link_destination_with_parentheses_is_wrapped_in_brackets():
+    """`)` を含むURLを裸で書くと、そこで宛先が終わったと解釈されて切り詰められる。"""
+    assert md('<div class="level-1"><p>'
+              '<a class="Link" href="https://example.com/a_(b)">図</a></p></div>') \
+        == "[図](<https://example.com/a_(b)>)"
+
+
+def test_link_destination_without_metacharacters_stays_bare():
+    """大多数のURLは囲む必要がないので、余計な <> を付けない。"""
+    assert md('<div class="level-1"><p>'
+              '<a class="Link" href="https://example.com/doc.pdf">資料</a></p></div>') \
+        == "[資料](https://example.com/doc.pdf)"
+
+
 def test_header_ref_is_not_turned_into_a_markdown_link():
     """HeaderRef は文書内アンカー。resolve_header_refs() が入れた本文をそのまま残す。"""
     assert md('<div class="level-1"><p>出血のおそれ'
