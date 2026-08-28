@@ -16,6 +16,8 @@ __pycache__/
 *.db
 
 # Log files
+*.log
+logs/
 *_log.txt
 full_load_log.txt
 load_log.txt
