@@ -217,7 +217,7 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 2:
-        print("使用例: python src/render_xsl.py <XMLファイルパス>")
+        print("使用例: .venv\\Scripts\\python.exe src\\render_xsl.py <XMLファイルパス>")
         print("（自動テストは pytest tests/test_render_xsl.py にあります）")
         sys.exit(0)
 

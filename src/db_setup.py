@@ -383,7 +383,7 @@ def setup_database(recreate: bool = False):
         print("  既存行を再利用して sections を1行も作らないまま完了してしまいます。")
         print()
         print("  作り直す場合:")
-        print("    python src/db_setup.py --recreate     # 既存データを破棄して再作成")
+        print("    .venv\\Scripts\\python.exe src\\db_setup.py --recreate  # 既存データを破棄して再作成")
         print(f"  DBを残したい場合は {DB_PATH} を退避してから再実行してください。")
         sys.exit(1)
     elif state == "incompatible":
@@ -399,7 +399,7 @@ def setup_database(recreate: bool = False):
         print("  このまま続けても不足列は追加されず、ロード時の insert が失敗します。")
         print()
         print("  作り直す場合:")
-        print("    python src/db_setup.py --recreate     # 既存データを破棄して再作成")
+        print("    .venv\\Scripts\\python.exe src\\db_setup.py --recreate  # 既存データを破棄して再作成")
         print(f"  DBを残したい場合は {DB_PATH} を退避してから再実行してください。")
         sys.exit(1)
 
@@ -533,7 +533,7 @@ def ensure_fts_index(max_attempts: int = FTS_REBUILD_MAX_ATTEMPTS) -> bool:
 
     print(
         f"FTS5インデックスを {max_attempts} 回試しても完成できませんでした。"
-        f"`python src/db_setup.py --rebuild-fts --resume` で手動再開してください。"
+        f"`.venv\\Scripts\\python.exe src\\db_setup.py --rebuild-fts --resume` で手動再開してください。"
     )
     return False
 
@@ -544,8 +544,8 @@ if __name__ == "__main__":
     unknown = [a for a in args if a not in KNOWN_ARGS]
     if unknown:
         print(f"エラー: 未知の引数: {' '.join(unknown)}")
-        print("使用例: python src/db_setup.py [--recreate]")
-        print("        python src/db_setup.py --rebuild-fts [--resume]")
+        print("使用例: .venv\\Scripts\\python.exe src\\db_setup.py [--recreate]")
+        print("        .venv\\Scripts\\python.exe src\\db_setup.py --rebuild-fts [--resume]")
         sys.exit(1)
 
     if "--rebuild-fts" in args:
