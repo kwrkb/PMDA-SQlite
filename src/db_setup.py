@@ -90,27 +90,109 @@ def _has_unique_index(cursor, table: str, column: str) -> bool:
     return False
 
 
+# スキーマ照合の対象。テーブルは定義（列・制約・外部キー）まで照合し、VIEW と FTS は
+# 存在だけを見る。VIEW と FTS は sections から作り直せる派生物で、欠けていれば
+# setup_database() の CREATE ... IF NOT EXISTS がそのまま補える。
+SCHEMA_TABLES = ("medicines", "specifications", "interactions", "sections")
+SCHEMA_DERIVED = ("medicines_legacy", "sections_fts")
+
+
+def _table_fingerprint(cursor, table: str) -> tuple:
+    """CREATE TABLE IF NOT EXISTS では直せない部分（列・UNIQUE/主キー制約・外部キー）を返す。
+
+    通常のインデックス（origin='c'）は CREATE INDEX IF NOT EXISTS で補えるので含めない。
+    旧構成の冗長インデックス idx_sections_medicine_id が残っていても current のまま。
+    """
+    columns = tuple(
+        (name, col_type.upper(), notnull, dflt, pk)
+        for _cid, name, col_type, notnull, dflt, pk in cursor.execute(f"PRAGMA table_info({table})")
+    )
+    constraints = []
+    for row in cursor.execute(f"PRAGMA index_list({table})").fetchall():
+        name, unique, origin = row[1], row[2], row[3]
+        if origin == "c":
+            continue
+        cols = tuple(r[2] for r in cursor.execute(f"PRAGMA index_info('{name}')"))
+        constraints.append((origin, unique, cols))
+    foreign_keys = tuple(sorted(
+        (r[2], r[3], r[4], r[6]) for r in cursor.execute(f"PRAGMA foreign_key_list({table})")
+    ))
+    return columns, tuple(sorted(constraints)), foreign_keys
+
+
+def _existing_objects(cursor) -> set:
+    return {row[0] for row in cursor.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")}
+
+
+_REFERENCE_FINGERPRINT = None
+
+
+def _reference_fingerprint() -> dict:
+    """create_schema() を :memory: に流して得た、現行スキーマのテーブル定義。
+
+    期待値を手書きの一覧にせず同じDDLから導くので、DDLを変えても照合がずれない。
+    """
+    global _REFERENCE_FINGERPRINT
+    if _REFERENCE_FINGERPRINT is None:
+        conn = sqlite3.connect(":memory:")
+        try:
+            cur = conn.cursor()
+            create_schema(cur)
+            _REFERENCE_FINGERPRINT = {
+                "tables": {t: _table_fingerprint(cur, t) for t in SCHEMA_TABLES},
+                # FTS5 が無いビルドの SQLite では sections_fts は作られない
+                "derived": tuple(o for o in SCHEMA_DERIVED if o in _existing_objects(cur)),
+            }
+        finally:
+            conn.close()
+    return _REFERENCE_FINGERPRINT
+
+
 def detect_schema_state(cursor) -> str:
-    """medicines テーブルのスキーマ世代を判定する。'absent' | 'legacy' | 'current'。
+    """DBのスキーマ状態を判定する。
+
+    - 'absent'       : 現行スキーマのオブジェクトが1つも無い（新規DB）
+    - 'legacy'       : 旧スキーマの medicines（本文35カラム・package_insert_no に UNIQUE 無し）
+    - 'incompatible' : 既存テーブルの定義（列・型・NOT NULL・主キー・UNIQUE・外部キー）が
+                       現行と違う、または medicines が無いのに他のテーブルがある。
+                       CREATE TABLE IF NOT EXISTS では直せないので作り直しが要る
+    - 'incomplete'   : 既存テーブルの定義は現行どおりで、テーブル・VIEW・FTS の一部が欠けている。
+                       setup_database() がそのまま補える
+    - 'current'      : 全オブジェクトが揃い、テーブル定義も現行どおり
 
     CREATE TABLE IF NOT EXISTS は既存テーブルの定義を一切変更しないため、
-    旧DBの上でセットアップしても medicines は旧定義（package_insert_no に
-    UNIQUE無し・本文35カラム）のまま残る。その状態で xml_to_db.py を走らせると
-    既存 package_insert_no が is_new=False と判定され sections が1行も
-    入らないまま「成功」と表示されるので、ここで検出する必要がある。
+    旧DBの上でセットアップしても medicines は旧定義のまま残る。その状態で xml_to_db.py を
+    走らせると既存 package_insert_no が is_new=False と判定され sections が1行も
+    入らないまま「成功」と表示され、列の欠けたテーブルでは insert が失敗する。
     """
-    exists = cursor.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='medicines'"
-    ).fetchone()
-    if not exists:
-        return "absent"
+    existing = _existing_objects(cursor)
+    reference = _reference_fingerprint()
+
+    if "medicines" not in existing:
+        others = (set(SCHEMA_TABLES) | set(SCHEMA_DERIVED)) & existing
+        return "incompatible" if others else "absent"
 
     columns = {row[1] for row in cursor.execute("PRAGMA table_info(medicines)")}
     if LEGACY_MEDICINE_COLUMN in columns:
         return "legacy"
     if not _has_unique_index(cursor, "medicines", "package_insert_no"):
         return "legacy"
-    return "current"
+
+    for table, expected in reference["tables"].items():
+        if table in existing and _table_fingerprint(cursor, table) != expected:
+            return "incompatible"
+
+    required = set(reference["tables"]) | set(reference["derived"])
+    return "current" if required <= existing else "incomplete"
+
+
+def schema_mismatches(cursor) -> list:
+    """現行スキーマと定義が食い違う既存テーブル名の一覧（エラー表示用）。"""
+    existing = _existing_objects(cursor)
+    return [
+        table for table, expected in _reference_fingerprint()["tables"].items()
+        if table in existing and _table_fingerprint(cursor, table) != expected
+    ]
 
 
 def _drop_all(cursor):
@@ -119,43 +201,12 @@ def _drop_all(cursor):
     print("既存のテーブル/VIEWを削除しました。")
 
 
-def setup_database(recreate: bool = False):
-    """データベースとテーブルを作成する
+def create_schema(cursor):
+    """現行スキーマのテーブル・インデックス・FTS・VIEWを（無ければ）作る。
 
-    Args:
-        recreate: True なら既存のテーブル/VIEWを削除してから作り直す。
-                  旧スキーマのDBを検出した場合はこれを指定しない限り中断する。
+    setup_database() と、detect_schema_state() が照合に使う期待スキーマの両方が
+    このDDLを使う。FTS5 が使えない SQLite では作らずに、その例外を返す（成功時は None）。
     """
-
-    # ディレクトリの存在確認。DB_PATH がファイル名だけ（PMDA_DB_PATH=trial.sqlite 等）の
-    # ときは dirname が '' になり、os.makedirs('') は FileNotFoundError を投げる。
-    db_dir = os.path.dirname(DB_PATH)
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
-
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    print(f"Setting up database at {DB_PATH}...")
-
-    state = detect_schema_state(cursor)
-    if recreate:
-        _drop_all(cursor)
-        conn.commit()
-    elif state == "legacy":
-        conn.close()
-        print()
-        print("エラー: 旧スキーマのデータベースが存在します。")
-        print("  現行スキーマは medicines を識別情報のみに絞り、本文を sections へ正規化し、")
-        print("  package_insert_no を UNIQUE にしています。CREATE TABLE IF NOT EXISTS は")
-        print("  既存テーブルの定義を変更しないため、このまま続けると xml_to_db.py が")
-        print("  既存行を再利用して sections を1行も作らないまま完了してしまいます。")
-        print()
-        print("  作り直す場合:")
-        print("    python src/db_setup.py --recreate     # 既存データを破棄して再作成")
-        print(f"  DBを残したい場合は {DB_PATH} を退避してから再実行してください。")
-        sys.exit(1)
-
     # 1. medicines テーブル（添付文書の識別情報・メタデータのみ）
     #    本文は sections テーブルに正規化して格納する（XSL_SPIKE.md 参照）。
     #    1 XML = 1 medicines とし、package_insert_no を一意キーにする
@@ -273,9 +324,9 @@ def setup_database(recreate: bool = False):
     # MATCH '高血圧' のような検索が実質機能しないため（XSL_SPIKE.md 参照）。
     try:
         cursor.execute(SECTIONS_FTS_DDL)
-        print("FTS5 table (trigram) created successfully.")
-    except Exception as e:
-        print(f"Skipping FTS5 table creation: {e}")
+        fts_error = None
+    except sqlite3.Error as e:
+        fts_error = e
 
     # medicines_legacy 互換VIEW: sections を HDR_* ごとにPIVOTし、
     # 旧35カラムスキーマ(json_to_db.py の section_map 等)と同じ形で読めるようにする。
@@ -294,6 +345,69 @@ def setup_database(recreate: bool = False):
         LEFT JOIN sections s ON s.medicine_id = m.id
         GROUP BY m.id
     ''')
+
+    return fts_error
+
+
+def setup_database(recreate: bool = False):
+    """データベースとテーブルを作成する
+
+    Args:
+        recreate: True なら既存のテーブル/VIEWを削除してから作り直す。
+                  旧スキーマ（legacy）や定義の食い違うDB（incompatible）を検出した場合は
+                  これを指定しない限り中断する。欠けたオブジェクトだけなら（incomplete）補う。
+    """
+
+    # ディレクトリの存在確認。DB_PATH がファイル名だけ（PMDA_DB_PATH=trial.sqlite 等）の
+    # ときは dirname が '' になり、os.makedirs('') は FileNotFoundError を投げる。
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    print(f"Setting up database at {DB_PATH}...")
+
+    state = detect_schema_state(cursor)
+    if recreate:
+        _drop_all(cursor)
+        conn.commit()
+    elif state == "legacy":
+        conn.close()
+        print()
+        print("エラー: 旧スキーマのデータベースが存在します。")
+        print("  現行スキーマは medicines を識別情報のみに絞り、本文を sections へ正規化し、")
+        print("  package_insert_no を UNIQUE にしています。CREATE TABLE IF NOT EXISTS は")
+        print("  既存テーブルの定義を変更しないため、このまま続けると xml_to_db.py が")
+        print("  既存行を再利用して sections を1行も作らないまま完了してしまいます。")
+        print()
+        print("  作り直す場合:")
+        print("    python src/db_setup.py --recreate     # 既存データを破棄して再作成")
+        print(f"  DBを残したい場合は {DB_PATH} を退避してから再実行してください。")
+        sys.exit(1)
+    elif state == "incompatible":
+        mismatched = schema_mismatches(cursor)
+        conn.close()
+        print()
+        print("エラー: 現行スキーマと定義が食い違うデータベースです。")
+        if mismatched:
+            print(f"  定義が違うテーブル: {', '.join(mismatched)}")
+        else:
+            print("  medicines テーブルが無いのに、他のテーブル/VIEWだけが残っています。")
+        print("  CREATE TABLE IF NOT EXISTS は既存テーブルの定義を変更しないため、")
+        print("  このまま続けても不足列は追加されず、ロード時の insert が失敗します。")
+        print()
+        print("  作り直す場合:")
+        print("    python src/db_setup.py --recreate     # 既存データを破棄して再作成")
+        print(f"  DBを残したい場合は {DB_PATH} を退避してから再実行してください。")
+        sys.exit(1)
+
+    fts_error = create_schema(cursor)
+    if fts_error is None:
+        print("FTS5 table (trigram) created successfully.")
+    else:
+        print(f"Skipping FTS5 table creation: {fts_error}")
 
     conn.commit()
     conn.close()
