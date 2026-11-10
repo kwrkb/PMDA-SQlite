@@ -38,7 +38,7 @@ from config import (
     VENDOR_XSL_PATH,
     get_xml_source_dir,
 )
-from db_setup import ensure_fts_index
+from db_setup import detect_schema_state, ensure_fts_index
 from html_to_markdown import convert_section_body
 from parse_product_name import parse_product_name
 from render_xsl import extract_sections, load_xslt, transform_xml
@@ -625,14 +625,46 @@ class LoadResult:
     error_count: int = 0
     errors: List[Tuple[str, str]] = field(default_factory=list)
     fts_ok: bool = False
+    schema_state: str = "current"
 
     @property
     def ok(self) -> bool:
-        """1件も失敗せず、FTSインデックスも完成したか。"""
-        return self.error_count == 0 and self.fts_ok
+        """スキーマが現行で、1件も失敗せず、FTSインデックスも完成したか。"""
+        return self.schema_state == "current" and self.error_count == 0 and self.fts_ok
+
+
+# detect_schema_state() が current 以外を返したときの案内（Issue #31）
+SCHEMA_GUIDANCE = {
+    "absent": "テーブルがありません。先に .venv\\Scripts\\python.exe src\\db_setup.py を実行してください",
+    "incomplete": "スキーマの一部（テーブル/VIEW/FTS）が欠けています。"
+                  ".venv\\Scripts\\python.exe src\\db_setup.py で補ってください",
+    "legacy": "旧スキーマのDBです。.venv\\Scripts\\python.exe src\\db_setup.py --recreate で作り直してください",
+    "incompatible": "現行スキーマと定義が食い違うDBです。"
+                    ".venv\\Scripts\\python.exe src\\db_setup.py --recreate で作り直してください",
+}
+
+
+def check_schema(db_path: str) -> str:
+    """ロード先DBのスキーマ状態を返す。DBファイルが無ければ作らずに 'absent'。"""
+    if not os.path.exists(db_path):
+        return "absent"
+    conn = sqlite3.connect(db_path)
+    try:
+        return detect_schema_state(conn.cursor())
+    finally:
+        conn.close()
 
 
 def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional[int] = None) -> LoadResult:
+    # ワーカープールを起動する前に確かめる。テーブル不在のまま走らせると、全件分の
+    # XSLT変換（約26分）を払ったうえで store_result() が1件ずつ失敗する。
+    schema_state = check_schema(DB_PATH)
+    if schema_state != "current":
+        guidance = SCHEMA_GUIDANCE.get(schema_state, f"スキーマ状態が不明です: {schema_state}")
+        print(f"エラー: {DB_PATH}: {guidance}")
+        print("判定: 失敗（ロード前のスキーマ確認）。XMLは1件も処理していません")
+        return LoadResult(schema_state=schema_state)
+
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
