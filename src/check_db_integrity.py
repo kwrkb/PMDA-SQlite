@@ -1,17 +1,62 @@
+"""
+生成DBの整合性検査と統計表示。
+
+ロード後の検証ゲートとして使えるよう、重大な異常が1つでもあれば exit 1 で終わる
+（`| tail` 越しでも WARNING 行の見落としに頼らずに済む）。
+
+重大（exit 1）: DB不在 / テーブル・VIEW・FTS不在 / medicines が0件 / 孤児行 /
+    sections を1件も持たない medicines / 必須フィールドのNULL・空 /
+    package_insert_no の重複 / section_no の浮動小数点残骸 /
+    sections_fts の件数が sections と一致しない（未構築・途中で止まった構築）
+情報表示のみ: sections.body_md の空（中間見出しで正常に発生）/
+    specifications を持たない medicines / interactions.target_name の空 /
+    specifications の (medicine_id, product_name) 重複（UNIQUE 制約で防止済み）
+
+使い方:
+    .venv\\Scripts\\python.exe src\\check_db_integrity.py
+"""
+
 import os
 import sqlite3
+import sys
+from typing import List
 
 from config import DB_PATH
 
 
-def check_integrity():
+def check_integrity() -> bool:
+    """整合性を検査して結果を表示し、重大な異常が無ければ True を返す。"""
     if not os.path.exists(DB_PATH):
         print(f"Error: Database not found at {DB_PATH}")
-        return
+        return False
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
+    try:
+        problems = _run_checks(conn.cursor())
+    except sqlite3.Error as e:
+        # テーブル不在など、検査クエリそのものが通らないDB
+        problems = [f"検査クエリが失敗しました（スキーマ不備の可能性）: {e}"]
+    finally:
+        conn.close()
+
+    print("=== Result ===")
+    if problems:
+        print(f"❌ NG: 重大な異常が {len(problems)} 件あります")
+        for p in problems:
+            print(f"  - {p}")
+        return False
+    print("✅ OK: 重大な異常はありません")
+    return True
+
+
+def _run_checks(cur: sqlite3.Cursor) -> List[str]:
+    """各検査を実行して表示し、重大な異常の説明を列挙して返す。"""
+    problems: List[str] = []
+
+    def fail(message: str) -> None:
+        print(f"  ❌ WARNING: {message}")
+        problems.append(message)
 
     print("=== Database Integrity & Statistics Check ===\n")
 
@@ -23,6 +68,8 @@ def check_integrity():
         cur.execute(f"SELECT COUNT(*) FROM {t}")
         counts[t] = cur.fetchone()[0]
         print(f"{t}: {counts[t]:,} records")
+    if counts['medicines'] == 0:
+        fail("medicines が0件です（ロードが行われていないか、全件失敗しています）")
     print("OK\n")
 
     # 2. Referential Integrity
@@ -37,7 +84,7 @@ def check_integrity():
     orphan_specs = cur.fetchone()[0]
     print(f"Orphan specifications (no medicine parent): {orphan_specs}")
     if orphan_specs > 0:
-        print("  ❌ WARNING: Found orphan specifications!")
+        fail(f"Found orphan specifications: {orphan_specs}")
 
     # Interactions -> Medicines
     cur.execute("""
@@ -48,7 +95,7 @@ def check_integrity():
     orphan_interactions = cur.fetchone()[0]
     print(f"Orphan interactions (no medicine parent): {orphan_interactions}")
     if orphan_interactions > 0:
-        print("  ❌ WARNING: Found orphan interactions!")
+        fail(f"Found orphan interactions: {orphan_interactions}")
 
     # Sections -> Medicines
     cur.execute("""
@@ -59,7 +106,7 @@ def check_integrity():
     orphan_sections = cur.fetchone()[0]
     print(f"Orphan sections (no medicine parent): {orphan_sections}")
     if orphan_sections > 0:
-        print("  ❌ WARNING: Found orphan sections!")
+        fail(f"Found orphan sections: {orphan_sections}")
 
     # Medicines without Specs (Logic check)
     cur.execute("""
@@ -81,7 +128,7 @@ def check_integrity():
     medicine_no_sections = cur.fetchone()[0]
     print(f"Medicines without any sections: {medicine_no_sections}")
     if medicine_no_sections > 0:
-        print("  ❌ WARNING: XSLT変換が実施されていないmedicinesがあります")
+        fail(f"XSLT変換が実施されていないmedicinesがあります: {medicine_no_sections}")
 
     print("OK\n")
 
@@ -98,7 +145,7 @@ def check_integrity():
         cnt = cur.fetchone()[0]
         print(f"{table}.{field} is NULL/Empty: {cnt}")
         if cnt > 0:
-            print(f"  ❌ WARNING: Missing critical data in {field}")
+            fail(f"Missing critical data in {table}.{field}: {cnt}")
 
     null_checks_spec = [
         ('product_name', 'specifications'),
@@ -109,7 +156,7 @@ def check_integrity():
         cnt = cur.fetchone()[0]
         print(f"{table}.{field} is NULL/Empty: {cnt}")
         if cnt > 0:
-            print(f"  ❌ WARNING: Missing critical data in {field}")
+            fail(f"Missing critical data in {table}.{field}: {cnt}")
 
     cur.execute("SELECT COUNT(*) FROM interactions WHERE target_name IS NULL OR target_name = ''")
     cnt = cur.fetchone()[0]
@@ -126,6 +173,8 @@ def check_integrity():
     cur.execute("SELECT package_insert_no, COUNT(*) FROM medicines GROUP BY package_insert_no HAVING COUNT(*) > 1")
     dupe_pins = cur.fetchall()
     print(f"Duplicate package_insert_no in medicines: {len(dupe_pins)}")
+    if dupe_pins:
+        fail(f"Duplicate package_insert_no in medicines: {len(dupe_pins)}")
 
     cur.execute("SELECT medicine_id, product_name, COUNT(*) FROM specifications "
                 "GROUP BY medicine_id, product_name HAVING COUNT(*) > 1")
@@ -159,21 +208,24 @@ def check_integrity():
     float_artifacts = cur.fetchone()[0]
     print(f"\nFloating-point artifacts remaining in section_no: {float_artifacts}")
     if float_artifacts > 0:
-        print("  ❌ WARNING: fix_float_section_no() の丸め処理が効いていない項番があります")
+        fail(f"fix_float_section_no() の丸め処理が効いていない項番があります: {float_artifacts}")
 
     # 6. FTS5 Index Check
     print("\n--- 6. FTS5 Index Check ---")
     try:
         cur.execute("SELECT COUNT(*) FROM sections_fts")
         fts_count = cur.fetchone()[0]
+    except sqlite3.Error as e:
+        fail(f"FTS5 table not available: {e}")
+    else:
         print(f"sections_fts entries: {fts_count:,}")
-        if fts_count == 0:
-            print("  ⚠️ FTS5 index is empty. Run rebuild_fts_index() to populate.")
-        elif counts.get('sections', 0) > 0:
+        if counts['sections'] > 0:
             coverage = fts_count * 100 / counts['sections']
             print(f"  Coverage vs sections: {coverage:.1f}%")
-    except Exception as e:
-        print(f"  FTS5 table not available: {e}")
+        # 0件だけでなく途中で止まった構築（部分インデックス）も検索結果を黙って欠く
+        if fts_count != counts['sections']:
+            fail(f"sections_fts ({fts_count:,}) と sections ({counts['sections']:,}) の件数が一致しません。"
+                 "`db_setup.py --rebuild-fts --resume` で構築を完了させてください")
     print("OK\n")
 
     # 7. medicines_legacy VIEW Check
@@ -182,11 +234,12 @@ def check_integrity():
         cur.execute("SELECT COUNT(*) FROM medicines_legacy WHERE adverse_events IS NOT NULL")
         legacy_count = cur.fetchone()[0]
         print(f"medicines_legacy rows with adverse_events: {legacy_count:,}")
-    except Exception as e:
-        print(f"  medicines_legacy VIEW not available: {e}")
+    except sqlite3.Error as e:
+        fail(f"medicines_legacy VIEW not available: {e}")
     print("OK\n")
 
-    conn.close()
+    return problems
+
 
 if __name__ == "__main__":
-    check_integrity()
+    sys.exit(0 if check_integrity() else 1)
