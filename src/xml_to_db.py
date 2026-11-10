@@ -22,6 +22,7 @@ import sqlite3
 import sys
 import time
 import traceback
+from dataclasses import dataclass, field
 from datetime import datetime
 from glob import glob
 from multiprocessing import Pool, cpu_count
@@ -616,7 +617,22 @@ def write_error_log(errors: List[Tuple[str, str]], log_dir: str = LOG_DIR) -> Op
         return None
 
 
-def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional[int] = None):
+@dataclass
+class LoadResult:
+    """load_all() の結果。CLI の終了コードはこれから決める（ライブラリ側では sys.exit しない）。"""
+    total: int = 0
+    success_count: int = 0
+    error_count: int = 0
+    errors: List[Tuple[str, str]] = field(default_factory=list)
+    fts_ok: bool = False
+
+    @property
+    def ok(self) -> bool:
+        """1件も失敗せず、FTSインデックスも完成したか。"""
+        return self.error_count == 0 and self.fts_ok
+
+
+def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional[int] = None) -> LoadResult:
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
@@ -741,8 +757,22 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
         if log_path:
             print(f"全件のエラーログ: {log_path}")
 
-    ensure_fts_index()
+    fts_ok = ensure_fts_index()
     print_database_stats()
+
+    result = LoadResult(total=total, success_count=success_count, error_count=error_count,
+                        errors=errors, fts_ok=fts_ok)
+    print()
+    if result.ok:
+        print("判定: 成功（全件ロード済み・FTSインデックス完成）")
+    else:
+        reasons = []
+        if error_count:
+            reasons.append(f"XML {error_count}件が失敗")
+        if not fts_ok:
+            reasons.append("FTSインデックスが未完成")
+        print(f"判定: 失敗（{' / '.join(reasons)}）。終了コード 1 で終わります")
+    return result
 
 
 def print_database_stats():
@@ -785,23 +815,28 @@ def print_database_stats():
     conn.close()
 
 
-if __name__ == "__main__":
+def main(argv: List[str]) -> int:
+    """CLI エントリポイント。終了コードを返す（全件成功かつFTS完成で 0、それ以外 1）。"""
     limit = None
-    if len(sys.argv) > 1:
+    if argv:
         try:
-            limit = int(sys.argv[1])
+            limit = int(argv[0])
         except ValueError:
             print("エラー: 引数は整数で指定してください")
             print("使用例: python src/xml_to_db.py 10")
-            sys.exit(1)
+            return 1
         if limit < 0:
             print(f"エラー: 引数は0以上で指定してください: {limit}")
             print("使用例: python src/xml_to_db.py 10")
-            sys.exit(1)
+            return 1
 
     xml_source = get_xml_source_dir()
     if not xml_source:
         print(f"エラー: XMLソースディレクトリが見つかりません（PMDA_RAW_DIR={PMDA_RAW_DIR}）")
-        sys.exit(1)
+        return 1
 
-    load_all(xml_source, limit=limit)
+    return 0 if load_all(xml_source, limit=limit).ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
