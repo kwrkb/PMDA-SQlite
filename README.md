@@ -173,7 +173,6 @@ data/
 ### 3. データベース構築
 
 ```powershell
-$env:PYTHONPATH = "src"
 .venv\Scripts\python.exe src\db_setup.py
 .venv\Scripts\python.exe src\xml_to_db.py 10   # テスト用（10ディレクトリのみ）
 .venv\Scripts\python.exe src\xml_to_db.py      # 全件ロード（約26分。XSLT変換を並列実行）
@@ -187,8 +186,9 @@ $env:PYTHONPATH = "src"
 
 月次などでデータ更新する場合:
 1. 新しいXMLデータを `data/PMDAraw/`（または`PMDA_RAW_DIR`指定先）に配置
-2. `PYTHONPATH=src python src/db_setup.py --recreate`（既存DBを破棄してスキーマ再作成）
-3. `PYTHONPATH=src python src/xml_to_db.py`（データロード）
+2. `.venv\Scripts\python.exe src\db_setup.py --recreate`（既存DBを破棄してスキーマ再作成。DBファイルを手で消す必要はない）
+3. `.venv\Scripts\python.exe src\xml_to_db.py`（データロード）
+4. `.venv\Scripts\python.exe src\check_db_integrity.py`（ロード結果の検証）
 
 既存DBを残したまま再ロードしても本文は更新されません。`insert_medicine()` は
 既知の `package_insert_no` を `is_new=False` として扱い、`sections` /
