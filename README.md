@@ -57,10 +57,20 @@ CLI / REST API / MCPサーバ / GUI といった参照層は**非スコープ**�
 | `medicine_id` | INTEGER | medicinesテーブルへの参照 |
 | `product_name` | TEXT | 製品名（例：ボラニゴ錠10mg） |
 | `yj_code` | TEXT | 個別医薬品コード(YJコード) |
-| `dosage_form` | TEXT | 剤形 |
-| `strength` | REAL | 含有量 |
-| `strength_unit` | TEXT | 単位 |
+| `dosage_form` | TEXT | 剤形（※推定値） |
+| `strength` | REAL | 含有量（※推定値） |
+| `strength_unit` | TEXT | 単位（※推定値） |
 | `composition` | TEXT | 組成情報 |
+
+※ `dosage_form` / `strength` / `strength_unit` は**製品名（`product_name`）の文字列から推定した値**で、
+XMLの構造化フィールドではない（`src/parse_product_name.py`）。他の列がXMLタグから直接取った
+確定値なのに対し、これらは次の制約を持つ。
+
+- 剤形は `DOSAGE_FORM_MAPPING` のキーを長い順に製品名へ部分一致させたもので、販売名の文字面に依存する
+- 含量は製品名中の「数値＋単位」を正規表現で1つだけ取る（小数を含むものを優先）。配合剤
+  （`○○配合錠LD` 等）は数値が無いため `NULL` になり、複数成分・複数規格の製剤も1値に潰れる。
+  漢数字を含む表記も誤読しうる（例: `ヘパリンNa注5千単位/5mL` → `5` `mL`）
+- 取れなかった場合は `NULL`。`NULL` は「該当なし」ではなく「推定できなかった」を意味する
 
 ### `interactions` テーブル
 薬物相互作用情報。
@@ -163,7 +173,6 @@ data/
 ### 3. データベース構築
 
 ```powershell
-$env:PYTHONPATH = "src"
 .venv\Scripts\python.exe src\db_setup.py
 .venv\Scripts\python.exe src\xml_to_db.py 10   # テスト用（10ディレクトリのみ）
 .venv\Scripts\python.exe src\xml_to_db.py      # 全件ロード（約26分。XSLT変換を並列実行）
@@ -177,8 +186,9 @@ $env:PYTHONPATH = "src"
 
 月次などでデータ更新する場合:
 1. 新しいXMLデータを `data/PMDAraw/`（または`PMDA_RAW_DIR`指定先）に配置
-2. `PYTHONPATH=src python src/db_setup.py --recreate`（既存DBを破棄してスキーマ再作成）
-3. `PYTHONPATH=src python src/xml_to_db.py`（データロード）
+2. `.venv\Scripts\python.exe src\db_setup.py --recreate`（既存DBを破棄してスキーマ再作成。DBファイルを手で消す必要はない）
+3. `.venv\Scripts\python.exe src\xml_to_db.py`（データロード）
+4. `.venv\Scripts\python.exe src\check_db_integrity.py`（ロード結果の検証）
 
 既存DBを残したまま再ロードしても本文は更新されません。`insert_medicine()` は
 既知の `package_insert_no` を `is_new=False` として扱い、`sections` /

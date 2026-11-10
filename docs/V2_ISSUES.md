@@ -72,8 +72,8 @@ data/
 
 ## データベース再構築手順
 
-```bash
-rm data/pmda.sqlite
-PYTHONPATH=src python src/db_setup.py
-PYTHONPATH=src python src/xml_to_db.py
+```powershell
+.venv\Scripts\python.exe src\db_setup.py --recreate   # DBファイルを手で消す必要はない
+.venv\Scripts\python.exe src\xml_to_db.py
+.venv\Scripts\python.exe src\check_db_integrity.py
 ```

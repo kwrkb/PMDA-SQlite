@@ -52,7 +52,7 @@ uv pip install -r requirements-dev.txt   # uv picks up the .venv in the repo roo
 .venv\Scripts\python.exe src\render_xsl.py <xml>   # Not a test — inspect one file's sections by eye
 ```
 
-**Verify artifacts, not exit codes**, for any step that can fail silently: the loader read through `| tail` hands you the *pipe's* exit code, not the loader's — which is exactly how an empty `sections_fts` once passed for a successful run. Check `check_db_integrity.py` after every load.
+**Verify artifacts, not exit codes**, for any step that can fail silently: the loader read through `| tail` hands you the *pipe's* exit code, not the loader's — which is exactly how an empty `sections_fts` once passed for a successful run. Check `check_db_integrity.py` after every load; it exits 1 on any critical finding (missing tables, orphans, empty required fields, duplicate `package_insert_no`, float artifacts, an incomplete `sections_fts`), so it can gate a script — informational lines (empty `body_md`, medicines without specifications) do not fail it.
 
 **Run the whole suite — not the tests you think are affected — after touching a lookup/catalog table or a shared path.** Each such table sits in a different module from the tests that pin it: the `RegulatoryClassification` code→label mapping (`xml_to_db.load_regulatory_codes`) and `LEGACY_COLUMN_MAP` (`db_setup.py`, which drives the `medicines_legacy` VIEW) are covered in `tests/test_xml_to_db.py`, `DOSAGE_FORM_MAPPING` (`parse_product_name.py`) in `tests/test_parse_product_name.py`, and `INVALID_NAME_VALUES` (`xml_to_db.py`) only indirectly, through the `extract_generic_name` fallback cases.
 
