@@ -192,7 +192,18 @@ def _run_checks(cur: sqlite3.Cursor) -> List[str]:
         form = row['dosage_form'] if row['dosage_form'] else "(None)"
         print(f"  {form}: {row['c']}")
 
-    cur.execute("SELECT manufacturer, COUNT(*) as c FROM medicines GROUP BY manufacturer ORDER BY c DESC LIMIT 5")
+    # dosage_form / strength は製品名からの推定値（parse_product_name.py）。
+    # 配合剤などでは NULL が正常に発生するので判定には使わず、推定の劣化に
+    # 気づけるよう取得できなかった割合だけを出す。
+    print("\nEstimated from product_name (informational, not a failure):")
+    for col in ('dosage_form', 'strength'):
+        cur.execute(f"SELECT COUNT(*) FROM specifications WHERE {col} IS NULL")
+        missing = cur.fetchone()[0]
+        total = counts['specifications']
+        rate = f"{missing * 100 / total:.1f}%" if total else "n/a"
+        print(f"  {col} IS NULL: {missing:,} / {total:,} ({rate})")
+
+    cur.execute("SELECT manufacturer,COUNT(*) as c FROM medicines GROUP BY manufacturer ORDER BY c DESC LIMIT 5")
     print("\nTop 5 Manufacturers:")
     for row in cur.fetchall():
         print(f"  {row['manufacturer']}: {row['c']}")

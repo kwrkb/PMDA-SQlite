@@ -135,3 +135,19 @@ def test_cli_exit_code_reflects_the_result(healthy_db, tmp_path):
 
     env_ng = {**os.environ, "PMDA_DB_PATH": str(tmp_path / "nope.sqlite")}
     assert subprocess.run([sys.executable, script], env=env_ng, capture_output=True).returncode == 1
+
+
+def test_estimated_spec_fields_are_reported_but_do_not_fail(healthy_db, capsys):
+    # 製品名からの推定が取れない行（NULL）は件数と割合を出すだけで、判定は落とさない
+    _exec(healthy_db, "INSERT INTO specifications (medicine_id, product_name, dosage_form, strength, strength_unit) "
+                      "VALUES (1, 'A錠20mg', '錠', 20.0, 'mg')")
+    assert check_db_integrity.check_integrity() is True
+    out = capsys.readouterr().out
+    assert "dosage_form IS NULL: 1 / 2 (50.0%)" in out
+    assert "strength IS NULL: 1 / 2 (50.0%)" in out
+
+
+def test_estimate_rate_without_specifications(healthy_db, capsys):
+    _exec(healthy_db, "DELETE FROM specifications")
+    assert check_db_integrity.check_integrity() is True
+    assert "dosage_form IS NULL: 0 / 0 (n/a)" in capsys.readouterr().out
