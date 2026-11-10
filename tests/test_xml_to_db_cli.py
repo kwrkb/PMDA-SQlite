@@ -135,3 +135,22 @@ def test_legacy_db_is_rejected(db_path, xml_source, no_pool, capsys):
 def test_any_non_current_state_is_rejected(temp_db, xml_source, monkeypatch, no_pool, state):
     monkeypatch.setattr(xml_to_db, "detect_schema_state", lambda cursor: state)
     assert _run_main(monkeypatch, xml_source) == 1
+
+
+def test_the_partial_schema_from_issue_42_is_rejected(db_path, xml_source, no_pool, capsys):
+    # monkeypatch ではなく実物: UNIQUE はあるが必須列と関連テーブルが無い medicines
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE medicines (
+          id INTEGER PRIMARY KEY,
+          generic_name TEXT,
+          manufacturer TEXT,
+          source_file TEXT,
+          package_insert_no TEXT UNIQUE
+        )
+    """)
+    conn.commit()
+    conn.close()
+    result = xml_to_db.load_all(str(xml_source), workers=1)
+    assert (result.schema_state, result.ok, result.total) == ("incompatible", False, 0)
+    assert "--recreate" in capsys.readouterr().out
