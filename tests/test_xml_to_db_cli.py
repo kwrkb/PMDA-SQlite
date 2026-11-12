@@ -42,6 +42,7 @@ def _run_main(monkeypatch, source, argv=()) -> int:
     return xml_to_db.main(list(argv))
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_load_all_reports_success(temp_db, xml_source, monkeypatch):
     monkeypatch.setattr(xml_to_db, "ensure_fts_index", lambda: True)
     result = xml_to_db.load_all(str(xml_source), workers=1)
@@ -49,6 +50,7 @@ def test_load_all_reports_success(temp_db, xml_source, monkeypatch):
     assert result.ok is True
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_load_all_reports_a_broken_xml(temp_db, xml_source, monkeypatch, quiet_error_log):
     monkeypatch.setattr(xml_to_db, "ensure_fts_index", lambda: True)
     _add_broken_xml(xml_source)
@@ -59,6 +61,7 @@ def test_load_all_reports_a_broken_xml(temp_db, xml_source, monkeypatch, quiet_e
     assert quiet_error_log  # エラーログの書き出しは従来どおり行う
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_load_all_reports_an_unfinished_fts_index(temp_db, xml_source, monkeypatch):
     monkeypatch.setattr(xml_to_db, "ensure_fts_index", lambda: False)
     result = xml_to_db.load_all(str(xml_source), workers=1)
@@ -67,16 +70,19 @@ def test_load_all_reports_an_unfinished_fts_index(temp_db, xml_source, monkeypat
     assert result.ok is False
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_cli_exits_0_when_everything_loaded(temp_db, xml_source, monkeypatch):
     # FTSは差し替えず、子プロセスでの実構築まで通す
     assert _run_main(monkeypatch, xml_source) == 0
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_cli_exits_1_on_a_broken_xml(temp_db, xml_source, monkeypatch, quiet_error_log):
     _add_broken_xml(xml_source)
     assert _run_main(monkeypatch, xml_source) == 1
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_cli_exits_1_when_the_fts_index_is_unfinished(temp_db, xml_source, monkeypatch):
     monkeypatch.setattr(xml_to_db, "ensure_fts_index", lambda: False)
     assert _run_main(monkeypatch, xml_source) == 1

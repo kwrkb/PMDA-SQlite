@@ -405,6 +405,21 @@ if文だけに頼らず、挿入関数自体が「新規かどうか」を返す
   `LoadResult.schema_state` に載せて `ok` を偽にすれば、終了コードの決定は `main()` の1か所に閉じる
 - 覆す条件: `load_all()` を CLI 以外から呼ぶ利用者がいなくなり、関数を CLI に統合する場合
 
+## 2026-11-12: vendor 未取得時の skip はモジュール単位ではなく、依存テストに付けるフィクスチャで行う
+
+- 却下した案: `conftest.py` で vendor の有無を見て `pytest.skip(..., allow_module_level=True)` する
+  （Issue #39 の提案どおり）
+- 決め手: vendor を外して全件を流すと、壊れるのは 21 件だった。OSError で 6 failed + 9 errors、
+  加えてワーカープールを起動する `test_xml_to_db_cli.py` の 6 件はエラーにならずハングした。
+  これらは vendor に依存しないテストと同じモジュールに同居している。`test_xml_to_db.py` は
+  28 関数のうち 22 関数が vendor 不要で、`test_xml_to_db_cli.py` ではスキーマ拒否テストが
+  依存テストと `xml_source` フィクスチャを共有している。モジュール単位にすると、これらまで
+  巻き添えで skip される。session スコープの `vendor_styles` フィクスチャを依存テスト
+  （と `rendered_root`）にだけ付ければ、vendor なしでは 170 passed / 21 skipped、ありでは
+  191 passed / 0 skipped になる
+- 覆す条件: vendor に依存するテストが専用モジュールに分離され、モジュール単位でも巻き添えが
+  出なくなった場合
+
 ## 関連ドキュメント
 
 - [[xsl-fizzy-puddle-plan]] スパイク検証・本実装のプラン全文
