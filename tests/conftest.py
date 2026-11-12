@@ -25,7 +25,7 @@ def vendor_styles():
     """PMDA公式XSLT（vendor/pmda-styles/）を読むテストの前提。
 
     資材は再配布不可で未同梱のため、未取得だと OSError で落ちたり、
-    ワーカープールの初期化が失敗し続けてハングしたりする。テストが壊れて
+    ロード前の vendor 確認（Issue #56）で失敗したりする。テストが壊れて
     いるように見えないよう、失敗ではなく skip にして取得方法を示す。
     """
     if not is_complete(VENDOR_DIR):

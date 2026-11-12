@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from glob import glob
 from multiprocessing import Pool, cpu_count
+from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from lxml import etree
@@ -39,6 +40,7 @@ from config import (
     get_xml_source_dir,
 )
 from db_setup import detect_schema_state, ensure_fts_index
+from fetch_vendor import is_complete as vendor_is_complete
 from html_to_markdown import convert_section_body
 from parse_product_name import parse_product_name
 from render_xsl import extract_sections, load_xslt, transform_xml
@@ -626,11 +628,13 @@ class LoadResult:
     errors: List[Tuple[str, str]] = field(default_factory=list)
     fts_ok: bool = False
     schema_state: str = "current"
+    vendor_ok: bool = True
 
     @property
     def ok(self) -> bool:
-        """スキーマが現行で、1件も失敗せず、FTSインデックスも完成したか。"""
-        return self.schema_state == "current" and self.error_count == 0 and self.fts_ok
+        """スキーマが現行で、vendor が揃い、1件も失敗せず、FTSインデックスも完成したか。"""
+        return (self.schema_state == "current" and self.vendor_ok
+                and self.error_count == 0 and self.fts_ok)
 
 
 # detect_schema_state() が current 以外を返したときの案内（Issue #31）
@@ -664,6 +668,16 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
         print(f"エラー: {DB_PATH}: {guidance}")
         print("判定: 失敗（ロード前のスキーマ確認）。XMLは1件も処理していません")
         return LoadResult(schema_state=schema_state)
+
+    # ワーカーの initializer（_worker_init → load_xslt）が例外を出すと、Pool は死んだ
+    # ワーカーを作り直し続け、結果が永久に返らない（Issue #56）。プールが読むのと同じ
+    # ディレクトリを、起動前に確かめる。
+    vendor_dir = Path(VENDOR_XSL_PATH).parent
+    if not vendor_is_complete(vendor_dir):
+        print(f"エラー: {vendor_dir} が未取得か、必須ファイルが欠けています。"
+              "先に .venv\\Scripts\\python.exe src\\fetch_vendor.py を実行してください")
+        print("判定: 失敗（ロード前のvendor確認）。XMLは1件も処理していません")
+        return LoadResult(vendor_ok=False)
 
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
