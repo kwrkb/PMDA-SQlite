@@ -203,7 +203,7 @@ def _run_checks(cur: sqlite3.Cursor) -> List[str]:
         rate = f"{missing * 100 / total:.1f}%" if total else "n/a"
         print(f"  {col} IS NULL: {missing:,} / {total:,} ({rate})")
 
-    cur.execute("SELECT manufacturer,COUNT(*) as c FROM medicines GROUP BY manufacturer ORDER BY c DESC LIMIT 5")
+    cur.execute("SELECT manufacturer, COUNT(*) as c FROM medicines GROUP BY manufacturer ORDER BY c DESC LIMIT 5")
     print("\nTop 5 Manufacturers:")
     for row in cur.fetchall():
         print(f"  {row['manufacturer']}: {row['c']}")
