@@ -16,12 +16,13 @@ CLI / REST API / MCPサーバ / GUI といった参照層は**非スコープ**�
 
 ## データベース概要
 
-- **構成**（4テーブル + 互換VIEW）:
+- **構成**（5テーブル + 互換VIEW）:
   - `medicines` テーブル: 添付文書の識別情報・メタデータ（1 XML = 1レコード、`package_insert_no`が一意キー）
   - `specifications` テーブル: 規格（剤形・含有量）単位の詳細情報
   - `interactions` テーブル: 薬物相互作用情報（併用禁忌・併用注意）
   - `sections` テーブル: 本文をセクション単位（項番・見出し・階層・Markdown本文）で正規化
   - `medicines_legacy` VIEW: 旧35カラムスキーマ互換の読み取り専用ビュー
+  - `build_info` テーブル: DBの来歴（どのPMDA一括DL・どのvendor版・どのローダで作ったか）
 
 **注意**: データベースファイルはリポジトリに含まれていません。[セットアップ手順](#セットアップ)に従ってPMDAからデータをダウンロードし、構築してください。
 
@@ -81,6 +82,38 @@ XMLの構造化フィールドではない（`src/parse_product_name.py`）。�
 | `target_name` | TEXT | 相手薬剤名 |
 | `description` | TEXT | 相互作用の内容 |
 | `severity` | TEXT | `contraindication`（併用禁忌）/ `precaution`（併用注意） |
+
+### `build_info` テーブル
+DBの来歴。`xml_to_db.py` がロードの最後に1トランザクションで書く（全キーを毎回上書き）。
+XMLの一部が失敗したロードでも書く（`failed` に件数が入る）。ロード前の確認
+（スキーマ・vendor）で止まった場合は何も処理していないので書かない。
+
+| 列名 | 型 | 説明 |
+|------|------|------|
+| `key` | TEXT | キー（主キー） |
+| `value` | TEXT | 値。件数も文字列で入る。取れなかった値は `unknown` |
+
+| キー | 値 |
+|------|------|
+| `pmda_snapshot` | 入力パスに含まれる一括DLのディレクトリ名（例: `pmda_all_sgml_xml_20260114`）。含まれなければ `unknown` |
+| `source_dir` | 実際に読んだ入力ディレクトリの絶対パス |
+| `vendor_sha256` | `vendor/pmda-styles/` の必須ファイル（中身とパス）から求めた sha256（`fetch_vendor.vendor_digest()`）。同じ版なら取り直しても同じ値 |
+| `vendor_manifest_zip_sha256` | `vendor/pmda-styles/.fetch-manifest.json` に記録された `styles.zip` の sha256。マニフェストが無い、または手元の資材が記録と食い違う場合は `unknown` |
+| `lxml_version` / `libxslt_version` | XSLT変換に使った lxml と、それが同梱する libxslt の版 |
+| `loader_commit` | ローダのコミット（`git rev-parse HEAD`）。追跡中のファイルに未コミットの変更があれば末尾に `-dirty`。git が使えなければ `unknown` |
+| `built_at` | ロードの完了時刻（ISO8601 UTC, 例: `2026-11-13T04:05:06Z`） |
+| `xml_total` / `loaded` / `failed` | 対象XML数 / DBに書けた件数 / 失敗件数 |
+
+`vendor_sha256` / `vendor_manifest_zip_sha256` / `lxml_version` / `libxslt_version` / `loader_commit` は
+ワーカーが変換を始める前の時点の値。
+
+`build_info` は**直近のロード1回**を表す。DB全体の本文がその版で作られたと言えるのは、
+`db_setup.py --recreate` 直後の空のDBへロードした場合だけ（既存DBへの再ロードは既知の
+`package_insert_no` の `sections` を書き直さないため。[データの更新](#データの更新)参照）。
+
+`build_info` が無いDB（このテーブルの追加前に作ったもの）は、一度 `db_setup.py` を実行して
+テーブルを補う必要がある。`xml_to_db.py` はスキーマが現行（`current`）でないDBへのロードを
+拒否するため。ロード済みのデータは消えない（`--recreate` は不要）。
 
 ## 使い方
 

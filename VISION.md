@@ -30,7 +30,7 @@ PMDA（医薬品医療機器総合機構）が公開する電子添文XMLを、*
    `vendor/README.md` の更新手順への追随コストを引き受ける
 5. **外部に対する契約はスキーマのみ**。別プロジェクトの参照層が依存してよいのは
    `medicines` / `specifications` / `interactions` / `sections` /
-   `medicines_legacy`(VIEW) / `sections_fts`(trigram) の定義であり、
+   `medicines_legacy`(VIEW) / `sections_fts`(trigram) / `build_info`(来歴) の定義であり、
    内部のパイプライン構成・使用言語・ファイル分割は契約に含まれない
 
 ## 実装言語

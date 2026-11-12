@@ -89,6 +89,8 @@ def test_db_without_tables_fails(tmp_path, monkeypatch):
     "DELETE FROM sections_fts WHERE rowid IN (SELECT rowid FROM sections_fts LIMIT 1)",
     # 互換VIEWの不在
     "DROP VIEW medicines_legacy",
+    # 来歴テーブルの不在（スキーマ不備。中身が空なのは情報表示のみ）
+    "DROP TABLE build_info",
 ])
 def test_each_critical_problem_fails(healthy_db, sql):
     _exec(healthy_db, sql)
@@ -151,3 +153,19 @@ def test_estimate_rate_without_specifications(healthy_db, capsys):
     _exec(healthy_db, "DELETE FROM specifications")
     assert check_db_integrity.check_integrity() is True
     assert "dosage_form IS NULL: 0 / 0 (n/a)" in capsys.readouterr().out
+
+
+def test_build_info_is_shown(healthy_db, capsys):
+    _exec(healthy_db, "INSERT INTO build_info (key, value) VALUES "
+                      "('pmda_snapshot', 'pmda_all_sgml_xml_20260114'), ('failed', '0')")
+    assert check_db_integrity.check_integrity() is True
+    out = capsys.readouterr().out
+    assert "--- 8. Build Info ---" in out
+    assert "pmda_snapshot: pmda_all_sgml_xml_20260114" in out
+    assert "failed: 0" in out
+
+
+def test_empty_build_info_is_informational(healthy_db, capsys):
+    # ロード前・Issue #32 より前にロードしたDBは空。判定は落とさない
+    assert check_db_integrity.check_integrity() is True
+    assert "(empty)" in capsys.readouterr().out

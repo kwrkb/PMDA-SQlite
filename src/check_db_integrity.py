@@ -4,13 +4,14 @@
 ロード後の検証ゲートとして使えるよう、重大な異常が1つでもあれば exit 1 で終わる
 （`| tail` 越しでも WARNING 行の見落としに頼らずに済む）。
 
-重大（exit 1）: DB不在 / テーブル・VIEW・FTS不在 / medicines が0件 / 孤児行 /
+重大（exit 1）: DB不在 / テーブル（build_info を含む）・VIEW・FTS不在 / medicines が0件 / 孤児行 /
     sections を1件も持たない medicines / 必須フィールドのNULL・空 /
     package_insert_no の重複 / section_no の浮動小数点残骸 /
     sections_fts の件数が sections と一致しない（未構築・途中で止まった構築）
 情報表示のみ: sections.body_md の空（中間見出しで正常に発生）/
     specifications を持たない medicines / interactions.target_name の空 /
-    specifications の (medicine_id, product_name) 重複（UNIQUE 制約で防止済み）
+    specifications の (medicine_id, product_name) 重複（UNIQUE 制約で防止済み）/
+    build_info の中身（来歴。空でも判定は落とさない）
 
 使い方:
     .venv\\Scripts\\python.exe src\\check_db_integrity.py
@@ -247,6 +248,24 @@ def _run_checks(cur: sqlite3.Cursor) -> List[str]:
         print(f"medicines_legacy rows with adverse_events: {legacy_count:,}")
     except sqlite3.Error as e:
         fail(f"medicines_legacy VIEW not available: {e}")
+    print("OK\n")
+
+    # 8. Build Info（来歴, Issue #32）
+    # 中身は表示するだけ。空（ロード前・#32 より前にロードしたDB）でも判定は落とさない。
+    # テーブル自体の不在は、VIEW/FTS の不在と同じくスキーマ不備として重大扱いにする。
+    print("--- 8. Build Info ---")
+    try:
+        cur.execute("SELECT key, value FROM build_info ORDER BY key")
+        build_info = cur.fetchall()
+    except sqlite3.Error as e:
+        fail(f"build_info table not available: {e}。"
+             r"`.venv\Scripts\python.exe src\db_setup.py` で補ってください（データは消えません）")
+    else:
+        if build_info:
+            for row in build_info:
+                print(f"  {row['key']}: {row['value']}")
+        else:
+            print("  (empty) 来歴が記録されていません。xml_to_db.py でロードすると書き込まれます")
     print("OK\n")
 
     return problems

@@ -18,12 +18,14 @@ multiprocessing で並列化する。DB書き込みは親プロセスで直列�
 """
 
 import os
+import re
 import sqlite3
+import subprocess
 import sys
 import time
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from glob import glob
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
@@ -42,6 +44,7 @@ from config import (
 from db_setup import detect_schema_state, ensure_fts_index
 from fetch_vendor import broken_hint as vendor_broken_hint
 from fetch_vendor import is_complete as vendor_is_complete
+from fetch_vendor import manifest_mismatches, read_manifest, vendor_digest
 from fetch_vendor import missing_hint as vendor_missing_hint
 from html_to_markdown import convert_section_body
 from parse_product_name import parse_product_name
@@ -631,12 +634,14 @@ class LoadResult:
     fts_ok: bool = False
     schema_state: str = "current"
     vendor_ok: bool = True
+    build_info_ok: bool = True
 
     @property
     def ok(self) -> bool:
-        """スキーマが現行で、vendor が揃い、1件も失敗せず、FTSインデックスも完成したか。"""
+        """スキーマが現行で、vendor が揃い、1件も失敗せず、FTSインデックスも完成し、
+        来歴（build_info）も書けたか。"""
         return (self.schema_state == "current" and self.vendor_ok
-                and self.error_count == 0 and self.fts_ok)
+                and self.error_count == 0 and self.fts_ok and self.build_info_ok)
 
 
 # detect_schema_state() が current 以外を返したときの案内（Issue #31）
@@ -677,6 +682,94 @@ def check_vendor(xsl_path: str) -> Optional[str]:
     return None
 
 
+# --- 来歴（build_info, Issue #32） ---
+
+SNAPSHOT_PATTERN = re.compile(r"pmda_all_sgml_xml_\d{8}")
+UNKNOWN = "unknown"
+
+
+def pmda_snapshot_name(source_dir: str) -> str:
+    """入力パスに含まれる一括DLのディレクトリ名（pmda_all_sgml_xml_YYYYMMDD）。無ければ 'unknown'。
+
+    複数含まれる場合は末端に近いもの（実際に読んだ側）を採る。"""
+    matches = SNAPSHOT_PATTERN.findall(os.path.abspath(source_dir))
+    return matches[-1] if matches else UNKNOWN
+
+
+def loader_commit(repo_dir: str = os.path.dirname(os.path.abspath(__file__))) -> str:
+    """ローダのコミット（git rev-parse HEAD）。追跡中のファイルに未コミットの変更があれば '-dirty' を付ける。
+
+    コミットだけを書くと、手元で変更したコードで作ったDBがそのコミットで再現できるように見える。
+    未追跡ファイルは見ない（vendor/ や data/ は .gitignore 済みで、`git describe --dirty` と同じ扱い）。
+    git が無い・リポジトリ外・タイムアウトなら 'unknown'。プロセスの cwd ではなく
+    このファイルの場所で git を走らせる（別ディレクトリから起動されても同じ値にする）。
+    """
+    def git(*args) -> Optional[str]:
+        # text=True にしない。ロケールのコーデックで復号すると、非ASCIIのファイル名が
+        # 出力に混ざったとき（日本語 Windows で core.quotepath=false 等）に UnicodeDecodeError になる
+        try:
+            proc = subprocess.run(["git", *args], cwd=repo_dir, capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if proc.returncode != 0:
+            return None
+        return proc.stdout.decode("ascii", errors="replace").strip()
+
+    head = git("rev-parse", "HEAD")
+    if not head:
+        return UNKNOWN
+    status = git("status", "--porcelain", "--untracked-files=no")
+    if status is None:
+        return UNKNOWN
+    return f"{head}-dirty" if status else head
+
+
+def manifest_zip_sha256(vendor_dir: Path) -> str:
+    """マニフェストに記録された styles.zip の sha256。
+
+    手元の必須ファイルがマニフェストと食い違う（または記録が無い）なら、その zip から
+    展開した資材だとは言えないので 'unknown' にする。"""
+    manifest = read_manifest(vendor_dir)
+    if manifest is None or manifest_mismatches(vendor_dir) != []:
+        return UNKNOWN
+    return manifest.get("zip_sha256") or UNKNOWN
+
+
+def _dotted(version: tuple) -> str:
+    return ".".join(str(v) for v in version)
+
+
+def collect_build_inputs(xml_source_dir: str, vendor_dir: Path) -> Dict[str, str]:
+    """ロードの入力側の来歴。ワーカーがコンパイルする前の時点の vendor・コードを写すため、
+    プール起動前に集める（書き込みはロードの最後）。"""
+    return {
+        "pmda_snapshot": pmda_snapshot_name(xml_source_dir),
+        "source_dir": os.path.abspath(xml_source_dir),
+        "vendor_sha256": vendor_digest(vendor_dir),
+        "vendor_manifest_zip_sha256": manifest_zip_sha256(vendor_dir),
+        "lxml_version": _dotted(etree.LXML_VERSION),
+        "libxslt_version": _dotted(etree.LIBXSLT_VERSION),
+        "loader_commit": loader_commit(),
+    }
+
+
+def write_build_info(db_path: str, info: Dict[str, str]) -> bool:
+    """build_info を1トランザクションで INSERT OR REPLACE する。書けたか（True/False）を返す。
+
+    毎回すべてのキーを書く（条件付きで書かないキーがあると前回の値が残る）。"""
+    conn = sqlite3.connect(db_path)
+    try:
+        with conn:
+            conn.executemany("INSERT OR REPLACE INTO build_info (key, value) VALUES (?, ?)",
+                             sorted(info.items()))
+        return True
+    except sqlite3.Error as e:
+        print(f"  ✗ build_info の書き込みに失敗しました: {e}")
+        return False
+    finally:
+        conn.close()
+
+
 def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional[int] = None) -> LoadResult:
     # ワーカープールを起動する前に確かめる。テーブル不在のまま走らせると、全件分の
     # XSLT変換（約26分）を払ったうえで store_result() が1件ずつ失敗する。
@@ -692,6 +785,8 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
         print(f"エラー: {vendor_problem}")
         print("判定: 失敗（ロード前のvendor確認）。XMLは1件も処理していません")
         return LoadResult(vendor_ok=False)
+
+    build_inputs = collect_build_inputs(xml_source_dir, Path(VENDOR_XSL_PATH).parent)
 
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
@@ -818,10 +913,21 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
             print(f"全件のエラーログ: {log_path}")
 
     fts_ok = ensure_fts_index()
+
+    # 失敗があっても書く。プールを回した時点でDBは書き換わっており、書かなければ
+    # 前回のロードの来歴が今回の中身に付いたまま残る。失敗件数は failed に載る。
+    # 書き込みの失敗も来歴の欠けたDBなので、黙らずに判定を落とす。
+    build_info_ok = write_build_info(DB_PATH, {
+        **build_inputs,
+        "built_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "xml_total": str(total),
+        "loaded": str(success_count),
+        "failed": str(error_count),
+    })
     print_database_stats()
 
     result = LoadResult(total=total, success_count=success_count, error_count=error_count,
-                        errors=errors, fts_ok=fts_ok)
+                        errors=errors, fts_ok=fts_ok, build_info_ok=build_info_ok)
     print()
     if result.ok:
         print("判定: 成功（全件ロード済み・FTSインデックス完成）")
@@ -831,6 +937,8 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
             reasons.append(f"XML {error_count}件が失敗")
         if not fts_ok:
             reasons.append("FTSインデックスが未完成")
+        if not build_info_ok:
+            reasons.append("build_info を書けなかった")
         print(f"判定: 失敗（{' / '.join(reasons)}）。終了コード 1 で終わります")
     return result
 
@@ -876,7 +984,7 @@ def print_database_stats():
 
 
 def main(argv: List[str]) -> int:
-    """CLI エントリポイント。終了コードを返す（全件成功かつFTS完成で 0、それ以外 1）。"""
+    """CLI エントリポイント。終了コードを返す（全件成功・FTS完成・build_info 書き込み済みで 0、それ以外 1）。"""
     limit = None
     if argv:
         try:
