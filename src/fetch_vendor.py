@@ -44,6 +44,12 @@ def is_complete(vendor_dir: Path) -> bool:
     return all((vendor_dir / f).is_file() for f in REQUIRED_FILES)
 
 
+def missing_hint(vendor_dir: Path) -> str:
+    """is_complete() が偽のときに示す対処法（ローダとテストで共有する）。"""
+    return (f'{vendor_dir} が未取得か、必須ファイルが欠けています。'
+            r'先に .venv\Scripts\python.exe src\fetch_vendor.py を実行してください')
+
+
 def download(url: str) -> bytes:
     """URLからzipのバイト列を取得する。"""
     # urllib既定のUAを弾くサーバがあるため、素朴なUAを名乗る

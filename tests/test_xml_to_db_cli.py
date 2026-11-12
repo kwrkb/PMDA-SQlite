@@ -103,9 +103,9 @@ def test_cli_exits_1_without_a_source_dir(monkeypatch):
 
 @pytest.fixture
 def no_pool(monkeypatch):
-    """ワーカープールが起動されたら失敗させる（スキーマ確認より後に進んでいないことの確認）。"""
+    """ワーカープールが起動されたら失敗させる（ロード前の確認より後に進んでいないことの確認）。"""
     def _fail(*args, **kwargs):
-        raise AssertionError("スキーマ確認で止まるべきところでワーカープールが起動された")
+        raise AssertionError("ロード前の確認で止まるべきところでワーカープールが起動された")
     monkeypatch.setattr(xml_to_db, "Pool", _fail)
 
 
@@ -160,3 +160,29 @@ def test_the_partial_schema_from_issue_42_is_rejected(db_path, xml_source, no_po
     result = xml_to_db.load_all(str(xml_source), workers=1)
     assert (result.schema_state, result.ok, result.total) == ("incompatible", False, 0)
     assert "--recreate" in capsys.readouterr().out
+
+
+# --- ロード前の vendor 確認（Issue #56） ---
+# vendor_styles は付けない。vendor の有無にかかわらず、未取得の状態を作って確かめる。
+
+@pytest.fixture
+def vendor_dir(tmp_path, monkeypatch):
+    """プールが読む XSL のパスを一時ディレクトリへ向け、そのディレクトリを返す。"""
+    vendor_dir = tmp_path / "pmda-styles"
+    monkeypatch.setattr(xml_to_db, "VENDOR_XSL_PATH", str(vendor_dir / "preview_ja.xsl"))
+    return vendor_dir
+
+
+def test_missing_vendor_is_rejected_before_the_pool_starts(
+        temp_db, xml_source, monkeypatch, no_pool, vendor_dir, capsys):
+    assert _run_main(monkeypatch, xml_source) == 1
+    assert "fetch_vendor.py" in capsys.readouterr().out
+
+
+def test_partial_vendor_is_rejected(temp_db, xml_source, no_pool, vendor_dir):
+    from fetch_vendor import REQUIRED_FILES
+    for rel in REQUIRED_FILES[:-1]:  # 1つだけ欠けた状態
+        (vendor_dir / rel).parent.mkdir(parents=True, exist_ok=True)
+        (vendor_dir / rel).write_text("", encoding="utf-8")
+    result = xml_to_db.load_all(str(xml_source), workers=1)
+    assert (result.vendor_ok, result.ok, result.total) == (False, False, 0)

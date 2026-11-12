@@ -9,15 +9,12 @@ import os
 import pytest
 from lxml import etree
 
-from fetch_vendor import VENDOR_DIR, is_complete
+from fetch_vendor import VENDOR_DIR, is_complete, missing_hint
 
 FIXTURE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 MINIMAL_XML = os.path.join(FIXTURE_DIR, "minimal.xml")
 
-VENDOR_MISSING_HINT = (
-    f"{VENDOR_DIR} が未取得です。"
-    r"テスト前に .venv\Scripts\python.exe src\fetch_vendor.py を実行してください"
-)
+VENDOR_MISSING_HINT = missing_hint(VENDOR_DIR)
 
 
 @pytest.fixture(scope="session")
@@ -25,7 +22,7 @@ def vendor_styles():
     """PMDA公式XSLT（vendor/pmda-styles/）を読むテストの前提。
 
     資材は再配布不可で未同梱のため、未取得だと OSError で落ちたり、
-    ワーカープールの初期化が失敗し続けてハングしたりする。テストが壊れて
+    ロード前の vendor 確認（Issue #56）で失敗したりする。テストが壊れて
     いるように見えないよう、失敗ではなく skip にして取得方法を示す。
     """
     if not is_complete(VENDOR_DIR):
