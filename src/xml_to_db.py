@@ -42,6 +42,7 @@ from config import (
     get_xml_source_dir,
 )
 from db_setup import detect_schema_state, ensure_fts_index
+from fetch_vendor import REQUIRED_FILES as VENDOR_REQUIRED_FILES
 from fetch_vendor import broken_hint as vendor_broken_hint
 from fetch_vendor import is_complete as vendor_is_complete
 from fetch_vendor import manifest_mismatches, read_manifest, vendor_digest
@@ -671,7 +672,11 @@ def check_vendor(xsl_path: str) -> Optional[str]:
 
     ワーカーの initializer（_worker_init → load_xslt）が例外を出すと、Pool は死んだ
     ワーカーを作り直し続け、結果が永久に返らない（Issue #56）。ファイルが揃っていても
-    中身が壊れていれば同じことが起きるため（Issue #58）、存在確認に加えて1度コンパイルしてみる。"""
+    中身が壊れていれば同じことが起きるため（Issue #58）、存在確認に加えて1度コンパイルしてみる。
+
+    XSL が document() で引く XML データ（label-ja.xml 等）はコンパイルでは読まれず、
+    変換のたびに読まれる。壊れていると止まりはしないが、原因1つが XML の件数だけの
+    失敗として報告される（Issue #60）。必須ファイルの XML はここで1度パースしておく。"""
     vendor_dir = Path(xsl_path).parent
     if not vendor_is_complete(vendor_dir):
         return vendor_missing_hint(vendor_dir)
@@ -679,6 +684,12 @@ def check_vendor(xsl_path: str) -> Optional[str]:
         load_xslt(xsl_path)
     except (etree.LxmlError, OSError) as e:
         return vendor_broken_hint(xsl_path, e)
+    for rel in VENDOR_REQUIRED_FILES:
+        if rel.endswith(".xml"):
+            try:
+                etree.parse(str(vendor_dir / rel))
+            except (etree.LxmlError, OSError) as e:
+                return vendor_broken_hint(vendor_dir / rel, e)
     return None
 
 

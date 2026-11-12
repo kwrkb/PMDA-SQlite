@@ -348,6 +348,36 @@ def test_broken_xsl_is_rejected_before_the_pool_starts(
     assert "fetch_vendor.py --force" in capsys.readouterr().out
 
 
+# --- ロード前の XML データ確認（Issue #60） ---
+# document() で引く XML はコンパイルでは読まれない。壊れていてもプールは止まらず、
+# XML ごとの失敗になる。ロード前に1度だけ報告して止めることを確かめる。
+
+_VALID_XSL = '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"/>'
+_DATA_XML = [rel for rel in REQUIRED_FILES if rel.endswith(".xml")]
+
+
+def _valid_vendor_contents() -> dict:
+    contents = {rel: _VALID_XSL for rel in REQUIRED_FILES if rel.endswith(".xsl")}
+    contents.update({rel: "<root/>" for rel in _DATA_XML})
+    return contents
+
+
+def test_intact_vendor_passes_the_check(vendor_dir):
+    _write_vendor(vendor_dir, _valid_vendor_contents())
+    assert xml_to_db.check_vendor(str(vendor_dir / "preview_ja.xsl")) is None
+
+
+@pytest.mark.parametrize("rel", _DATA_XML)
+def test_broken_data_xml_is_rejected_before_the_pool_starts(
+        temp_db, xml_source, no_pool, vendor_dir, capsys, rel):
+    _write_vendor(vendor_dir, {**_valid_vendor_contents(), rel: "<label><Item"})
+    result = xml_to_db.load_all(str(xml_source), workers=1)
+    assert (result.vendor_ok, result.ok, result.total) == (False, False, 0)
+    out = capsys.readouterr().out
+    assert rel.split("/")[-1] in out
+    assert "fetch_vendor.py --force" in out
+
+
 # --- 来歴の各項目（Issue #32） ---
 
 @pytest.mark.parametrize("path, expected", [

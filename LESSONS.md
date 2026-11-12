@@ -498,6 +498,22 @@ if文だけに頼らず、挿入関数自体が「新規かどうか」を返す
   未追跡のソースファイルがローダの挙動を変える構成（`src/` に置くだけで読まれるプラグイン等）が
   入った場合は、(4) で未追跡ファイルも dirty に数える
 
+## 2026-11-13: 変換時にだけ読む vendor の XML は、試し変換ではなく必須ファイルの XML を事前にパースして確かめる
+
+- 却下した案: (1) `check_vendor()` で小さな XML を1件試しに変換する（Issue #60 の提案どおり）
+  (2) XSL が `document()` で引く3ファイル（`label-ja.xml` / `StandardName.xml` /
+  `RegulatoryClassification.xml`）だけを名指しでパースする
+- 決め手: 実 vendor の `label-ja.xml` / `StandardName.xml` / `RegulatoryClassification.xml` を
+  それぞれ半分に切っても、XSL のコンパイル（`load_xslt()`）は通り、`check_vendor()` は None を返した。
+  (1) は試し変換用の XML を本体コードから参照できる場所に置く必要があり（`tests/fixtures/` は本体から
+  参照しない）、1件の変換で全ての `document()` 呼び出しが評価される保証もない。必須ファイルの `.xml` を
+  `etree.parse` するだけなら実 vendor で 10ms 前後で、壊れた3ファイルはすべて `XMLSyntaxError` で
+  止まった。(2) は XSL が引くファイルの手書き一覧になり、XSL 側の変更と食い違いうる。`REQUIRED_FILES`
+  の XML をすべて見るので、日本語版が読まない `label-en.xml` の破損でもロードを止めるが、同じ zip の
+  一部が壊れている時点で取り直し（`--force`）が必要なのは変わらない
+- 覆す条件: 整形式だが中身の構造が違う（要素名が変わった等）XML で変換結果だけが壊れる事例が
+  観測された場合。そのときはパースでは検出できないので、試し変換か出力の検査に切り替える
+
 ## 関連ドキュメント
 
 - [[xsl-fizzy-puddle-plan]] スパイク検証・本実装のプラン全文

@@ -136,10 +136,10 @@ def missing_hint(vendor_dir: Path) -> str:
             r'先に .venv\Scripts\python.exe src\fetch_vendor.py を実行してください')
 
 
-def broken_hint(xsl_path, error: Exception) -> str:
-    """必須ファイルは揃っているが XSL をコンパイルできないときの対処法。
+def broken_hint(path, error: Exception) -> str:
+    """必須ファイルは揃っているが、XSL をコンパイルできない・XML データを読めないときの対処法。
     is_complete() が真なので、--force を付けないと fetch_vendor.py は何もしない。"""
-    return (f'{xsl_path} をXSLTとしてコンパイルできません（{type(error).__name__}: {error}）。'
+    return (f'{path} を読み込めません（{type(error).__name__}: {error}）。'
             'vendor のファイルが壊れています。'
             r'先に .venv\Scripts\python.exe src\fetch_vendor.py --force で取り直してください')
 
