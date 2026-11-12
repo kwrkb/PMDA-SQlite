@@ -58,6 +58,8 @@ uv pip install -r requirements-dev.txt   # uv picks up the .venv in the repo roo
 
 Tests need no real data: body rendering goes through `tests/fixtures/minimal.xml` plus `vendor/pmda-styles/` (fetched by `src\fetch_vendor.py`; run it once before the first test run), and DB tests build a throwaway SQLite under `tmp_path` (`$env:PMDA_DB_PATH` overrides the DB path for a trial load). CI (`.github/workflows/ci.yml`) runs `ruff check` + `pytest` on Python 3.10–3.14 for every push to `main` and every PR.
 
+The vendor version is pinned by `vendor/pmda-styles/.fetch-manifest.json` — the one tracked file in that directory (sha256 of the zip and of each `REQUIRED_FILES`). `fetch_vendor.py` leaves it byte-identical when the fetched version is unchanged, so a diff on it means PMDA shipped a new stylesheet; `--force`-less runs warn (exit 0) when local files disagree with it. CI keys the vendor cache on its hash and **fails when a fresh fetch rewrites it** — a red CI with no code change can be a PMDA update: re-fetch, check output per `vendor/README.md`, commit the manifest. `lxml` (which bundles libxslt) is capped at `<7` for the same reason. Issue #33.
+
 ## Loader behaviour
 
 - `db_setup.py` **exits 1 over a pre-`sections` database** instead of upgrading it. `CREATE TABLE IF NOT EXISTS` never alters an existing table, so the old `medicines` would survive, every row would look already-loaded (`is_new=False`), and the run would write **zero** `sections` while reporting success. `--recreate` drops and rebuilds. The same mechanism is why reloading without `--recreate` produces no new `sections`: `store_result()` skips `interactions`/`sections` when `is_new=False`, since neither carries a UNIQUE constraint. `LESSONS.md` 2026-07-31.
