@@ -243,9 +243,11 @@ def test_main_without_force_is_quiet_when_files_match_the_manifest(tmp_path, mon
 
 def test_main_force_reports_whether_the_version_changed(tmp_path, monkeypatch, capsys):
     d = tmp_path / "vendor" / "pmda-styles"
-    assert _run_main(monkeypatch, d, _zip(_valid_files()), "--force") == 0
+    # zip はエントリに作成時刻を持つので、「同じ版」は同じバイト列を使い回して作る
+    data = _zip(_valid_files())
+    assert _run_main(monkeypatch, d, data, "--force") == 0
     assert "記録しました" in capsys.readouterr().out
-    assert _run_main(monkeypatch, d, _zip(_valid_files()), "--force") == 0
+    assert _run_main(monkeypatch, d, data, "--force") == 0
     assert "変更なし" in capsys.readouterr().out
     assert _run_main(monkeypatch, d, _zip(_valid_files(marker="newer")), "--force") == 0
     out = capsys.readouterr().out
