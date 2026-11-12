@@ -5,11 +5,13 @@ FTS構築は子プロセスを起動するため、判定だけ見たいケー�
 """
 
 import os
+import re
 import shutil
 import sqlite3
 
 import pytest
 
+import check_db_integrity
 import xml_to_db
 from fetch_vendor import REQUIRED_FILES
 
@@ -49,6 +51,66 @@ def test_load_all_reports_success(temp_db, xml_source, monkeypatch):
     result = xml_to_db.load_all(str(xml_source), workers=1)
     assert (result.total, result.success_count, result.error_count) == (1, 1, 0)
     assert result.ok is True
+
+
+# 公式XSLが出す IEEE754 の残骸（9.699999999999999 等）。CLAUDE.md の落とし穴1。
+# section_no は別経路でも丸められるので、本文に残った残骸は body_md を見ないと検出できない
+FLOAT_ARTIFACT = re.compile(r"\d+\.\d{12,}")
+
+
+@pytest.mark.usefixtures("vendor_styles")
+def test_load_all_lands_minimal_xml_in_the_database(temp_db, xml_source, monkeypatch):
+    """Issue #37: ワーカーの戻り値が store_result() を経てDBの中身になるまでを通す。
+
+    store_result 系の単体テストは手書きの dict を入力にしているので、_process_one() が
+    返す構造（body_el → body_md の差し替え、specs への dosage_form / strength の合流）が
+    変わっても気付けない。ここでは実際のワーカープールでロードし、FTSも差し替えずに
+    子プロセスで作らせる。temp_db の sections_fts は空から始まるので、MATCH が当たれば
+    PMDA_DB_PATH が子に渡って一時DBの索引を作ったことの確認にもなる。
+    """
+    result = xml_to_db.load_all(str(xml_source), workers=1)
+    assert (result.total, result.success_count, result.error_count) == (1, 1, 0), result.errors
+    assert result.fts_ok is True
+    assert result.ok is True
+
+    conn = sqlite3.connect(temp_db)
+    try:
+        assert conn.execute("SELECT generic_name, package_insert_no FROM medicines").fetchall() == [
+            ("テスト塩酸塩水和物", "9999999XX9999_1_01")]
+
+        # 製品名（テスト薬錠10mg / テスト薬錠50mg）から parse_product_name() が推定した値
+        specs = conn.execute("SELECT product_name, dosage_form, strength, strength_unit "
+                             "FROM specifications ORDER BY product_name").fetchall()
+        assert specs == [("テスト薬錠10mg", "錠", 10.0, "mg"), ("テスト薬錠50mg", "錠", 50.0, "mg")]
+
+        sections = conn.execute("SELECT xml_id, section_no, body_md FROM sections").fetchall()
+        assert sections
+        assert any(body for _, _, body in sections)
+        artifacts = [(no, body) for _, no, body in sections
+                     if FLOAT_ARTIFACT.search(no or "") or FLOAT_ARTIFACT.search(body or "")]
+        assert artifacts == []
+        # minimal.xml で公式XSLが残骸を出す箇所。消えただけでなく、丸めた値が入ること
+        section_no = {xml_id: no for xml_id, no, _ in sections if xml_id}
+        assert (section_no["HDR_UseInPregnant"], section_no["HDR_PediatricUse"]) == ("9.5", "9.7")
+
+        body = {xml_id: body for xml_id, _, body in sections if xml_id}
+        assert "横紋筋融解症" in body["HDR_SeriousAdverseEvents"]
+
+        def fts_hits(term: str) -> int:
+            return conn.execute("SELECT COUNT(*) FROM sections_fts WHERE sections_fts MATCH ?",
+                                (term,)).fetchone()[0]
+
+        assert fts_hits("横紋筋融解症") == 1
+        # trigram は3文字未満の語に MATCH しない。語が本文に在ることを先に確かめる
+        # （無ければ、語が本文から消えただけでも 0 件で通ってしまう）
+        assert any("血圧" in (b or "") for _, _, b in sections)
+        assert fts_hits("血圧") == 0
+    finally:
+        conn.close()
+
+    # 本番ロード後に流すのと同じ整合性チェック（孤児・重複・FTS件数の一致など）
+    monkeypatch.setattr(check_db_integrity, "DB_PATH", temp_db)
+    assert check_db_integrity.check_integrity() is True
 
 
 @pytest.mark.usefixtures("vendor_styles")
