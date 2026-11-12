@@ -9,15 +9,12 @@ import os
 import pytest
 from lxml import etree
 
-from fetch_vendor import VENDOR_DIR, is_complete
+from fetch_vendor import VENDOR_DIR, is_complete, missing_hint
 
 FIXTURE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 MINIMAL_XML = os.path.join(FIXTURE_DIR, "minimal.xml")
 
-VENDOR_MISSING_HINT = (
-    f"{VENDOR_DIR} が未取得です。"
-    r"テスト前に .venv\Scripts\python.exe src\fetch_vendor.py を実行してください"
-)
+VENDOR_MISSING_HINT = missing_hint(VENDOR_DIR)
 
 
 @pytest.fixture(scope="session")

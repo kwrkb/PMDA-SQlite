@@ -41,6 +41,7 @@ from config import (
 )
 from db_setup import detect_schema_state, ensure_fts_index
 from fetch_vendor import is_complete as vendor_is_complete
+from fetch_vendor import missing_hint as vendor_missing_hint
 from html_to_markdown import convert_section_body
 from parse_product_name import parse_product_name
 from render_xsl import extract_sections, load_xslt, transform_xml
@@ -674,8 +675,7 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
     # ディレクトリを、起動前に確かめる。
     vendor_dir = Path(VENDOR_XSL_PATH).parent
     if not vendor_is_complete(vendor_dir):
-        print(f"エラー: {vendor_dir} が未取得か、必須ファイルが欠けています。"
-              "先に .venv\\Scripts\\python.exe src\\fetch_vendor.py を実行してください")
+        print(f"エラー: {vendor_missing_hint(vendor_dir)}")
         print("判定: 失敗（ロード前のvendor確認）。XMLは1件も処理していません")
         return LoadResult(vendor_ok=False)
 
