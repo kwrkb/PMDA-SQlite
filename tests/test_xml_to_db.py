@@ -58,6 +58,7 @@ def test_extract_revision_date(minimal_root):
     assert extract_revision_date(minimal_root) == "2026年8月"
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_extract_specifications(minimal_root):
     specs = extract_specifications(minimal_root)
     assert [s["product_name"] for s in specs] == ["テスト薬錠10mg", "テスト薬錠50mg"]
@@ -297,6 +298,7 @@ def test_sections_composite_index_exists(temp_db):
 
 # --- Issue #22: 規制区分コード ---
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_regulatory_codes_come_from_the_vendor_lookup():
     """ハードコードではなく、公式XSLTが document() で読むのと同じ表から引く。"""
     codes = xml_to_db.load_regulatory_codes()
@@ -316,6 +318,7 @@ def test_regulatory_codes_come_from_the_vendor_lookup():
     assert codes["2"] == "劇薬"
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_regulatory_codes_ignore_the_older_table_in_the_same_file():
     """同じファイルの前半には Item[@code] という別の古い表が同居していて、
     向精神薬を1エントリにまとめているぶん9以降が2つずれている（前半の11は
@@ -340,12 +343,14 @@ def test_regulatory_label_reads_the_whole_label_text(tmp_path):
     assert xml_to_db.load_regulatory_codes(str(path)) == {"1": "処方箋医薬品"}
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_regulatory_label_warns_and_falls_back_on_unknown_code(capsys):
     xml_to_db._unknown_regulatory_codes.discard("999")
     assert xml_to_db.regulatory_label("999") == "コード999"
     assert "未知の規制区分コード: 999" in capsys.readouterr().out
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_extract_specifications_uses_official_labels():
     """実データで最も多い組み合わせ（9=習慣性医薬品 + 12=処方箋医薬品）。
     旧実装では 'コード9, 特定生物由来製品' になっていた。"""
@@ -368,6 +373,7 @@ def test_extract_specifications_uses_official_labels():
     assert extract_specifications(root)[0]["regulatory_classification"] == "習慣性医薬品, 処方箋医薬品"
 
 
+@pytest.mark.usefixtures("vendor_styles")
 def test_duplicate_labels_are_collapsed():
     """id=11 と id=12 はどちらも「処方箋医薬品」。ラベルは1つに畳む。"""
     root = etree.fromstring(f"""

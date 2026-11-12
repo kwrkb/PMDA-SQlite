@@ -9,8 +9,33 @@ import os
 import pytest
 from lxml import etree
 
+from fetch_vendor import VENDOR_DIR, is_complete
+
 FIXTURE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 MINIMAL_XML = os.path.join(FIXTURE_DIR, "minimal.xml")
+
+VENDOR_MISSING_HINT = (
+    f"{VENDOR_DIR} が未取得です。"
+    r"テスト前に .venv\Scripts\python.exe src\fetch_vendor.py を実行してください"
+)
+
+
+@pytest.fixture(scope="session")
+def vendor_styles():
+    """PMDA公式XSLT（vendor/pmda-styles/）を読むテストの前提。
+
+    資材は再配布不可で未同梱のため、未取得だと OSError で落ちたり、
+    ワーカープールの初期化が失敗し続けてハングしたりする。テストが壊れて
+    いるように見えないよう、失敗ではなく skip にして取得方法を示す。
+    """
+    if not is_complete(VENDOR_DIR):
+        pytest.skip(VENDOR_MISSING_HINT)
+
+
+def pytest_terminal_summary(terminalreporter):
+    # addopts の -q では skip 理由が出ないので、対処法はここで1度だけ示す
+    if not is_complete(VENDOR_DIR):
+        terminalreporter.write_line(VENDOR_MISSING_HINT, yellow=True)
 
 
 @pytest.fixture(scope="session")
@@ -25,7 +50,7 @@ def minimal_root(minimal_xml_path):
 
 
 @pytest.fixture(scope="session")
-def rendered_root(minimal_xml_path):
+def rendered_root(vendor_styles, minimal_xml_path):
     """最小XMLをPMDA公式XSLTで変換したHTMLツリー。
 
     XSLTのコンパイルと変換は重いのでセッション内で1度だけ行う。
