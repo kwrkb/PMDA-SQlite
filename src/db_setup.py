@@ -51,6 +51,7 @@ LEGACY_MEDICINE_COLUMN = "indications"
 # 作り直し(--recreate)で破棄するオブジェクト。medicines_fts は旧スキーマの
 # 全文検索テーブル（現行は sections_fts）。
 DROP_ORDER = [
+    ("TABLE", "build_info"),
     ("VIEW", "medicines_legacy"),
     ("TABLE", "sections_fts"),
     ("TABLE", "medicines_fts"),
@@ -93,7 +94,9 @@ def _has_unique_index(cursor, table: str, column: str) -> bool:
 # スキーマ照合の対象。テーブルは定義（列・制約・外部キー）まで照合し、VIEW と FTS は
 # 存在だけを見る。VIEW と FTS は sections から作り直せる派生物で、欠けていれば
 # setup_database() の CREATE ... IF NOT EXISTS がそのまま補える。
-SCHEMA_TABLES = ("medicines", "specifications", "interactions", "sections")
+# 期待値は create_schema() から導くが、どのテーブルを照合するかはこの一覧で決まる。
+# ここに無いテーブルは、欠けていても current と判定される（Issue #32 の build_info で確認）。
+SCHEMA_TABLES = ("medicines", "specifications", "interactions", "sections", "build_info")
 SCHEMA_DERIVED = ("medicines_legacy", "sections_fts")
 
 
@@ -318,6 +321,16 @@ def create_schema(cursor):
     cursor.execute('DROP INDEX IF EXISTS idx_sections_medicine_id')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_sections_medicine_ord ON sections(medicine_id, ord)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_sections_xml_id ON sections(xml_id)')
+
+    # 5. build_info テーブル（DBの来歴。Issue #32）
+    #    どのPMDA一括DL・どの vendor 版・どのローダで作ったかを key/value で持つ。
+    #    xml_to_db.load_all() がロードの最後に書く。キーの一覧は README.md のスキーマ節。
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS build_info (
+        key   TEXT PRIMARY KEY,
+        value TEXT
+    )
+    ''')
 
     # 全文検索用仮想テーブル (FTS5)
     # トークナイザは trigram にする。既定の unicode61 は日本語を分かち書きできず

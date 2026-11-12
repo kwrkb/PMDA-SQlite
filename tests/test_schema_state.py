@@ -127,6 +127,7 @@ def test_package_insert_no_without_unique_is_still_legacy(temp_db):
     "DROP TABLE sections",
     "DROP VIEW medicines_legacy",
     "DROP TABLE sections_fts",
+    "DROP TABLE build_info",
 ])
 def test_a_missing_object_is_incomplete_and_setup_repairs_it(temp_db, ddl):
     conn = sqlite3.connect(temp_db)
@@ -137,6 +138,40 @@ def test_a_missing_object_is_incomplete_and_setup_repairs_it(temp_db, ddl):
 
     db_setup.setup_database()
     assert _state(temp_db) == "current"
+
+
+def test_a_loaded_db_from_before_build_info_is_repaired_in_place(temp_db):
+    """Issue #32: build_info は加算的なテーブルなので、それより前に作ったDBは incomplete。
+    db_setup.py の再実行でテーブルだけが足され、ロード済みのデータはそのまま残る。"""
+    conn = sqlite3.connect(temp_db)
+    conn.execute("DROP TABLE build_info")
+    conn.execute("INSERT INTO medicines (generic_name, source_file, package_insert_no) VALUES ('薬', 'a.xml', 'P')")
+    conn.commit()
+    conn.close()
+    assert _state(temp_db) == "incomplete"
+
+    db_setup.setup_database()
+    assert _state(temp_db) == "current"
+    conn = sqlite3.connect(temp_db)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM medicines").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM build_info").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_recreate_drops_build_info(temp_db):
+    conn = sqlite3.connect(temp_db)
+    conn.execute("INSERT INTO build_info (key, value) VALUES ('pmda_snapshot', 'old')")
+    conn.commit()
+    conn.close()
+
+    db_setup.setup_database(recreate=True)
+    conn = sqlite3.connect(temp_db)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM build_info").fetchone()[0] == 0
+    finally:
+        conn.close()
 
 
 def test_only_medicines_missing_is_incompatible(temp_db):

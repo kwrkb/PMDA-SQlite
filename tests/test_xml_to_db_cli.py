@@ -8,18 +8,24 @@ import os
 import re
 import shutil
 import sqlite3
+import subprocess
+from pathlib import Path
 
 import pytest
+from lxml import etree
 
 import check_db_integrity
+import fetch_vendor
 import xml_to_db
 from fetch_vendor import REQUIRED_FILES
+
+SNAPSHOT = "pmda_all_sgml_xml_20260114"
 
 
 @pytest.fixture
 def xml_source(tmp_path, minimal_xml_path):
-    """PMDA配布物と同じ <SGML_XML>/<製品ディレクトリ>/<XML> 構成の入力を作る。"""
-    source = tmp_path / "SGML_XML"
+    """PMDA配布物と同じ <pmda_all_sgml_xml_YYYYMMDD>/<SGML_XML>/<製品ディレクトリ>/<XML> 構成の入力を作る。"""
+    source = tmp_path / SNAPSHOT / "SGML_XML"
     product_dir = source / "000001"
     product_dir.mkdir(parents=True)
     shutil.copy(minimal_xml_path, product_dir / "minimal.xml")
@@ -43,6 +49,21 @@ def _add_broken_xml(source) -> None:
 def _run_main(monkeypatch, source, argv=()) -> int:
     monkeypatch.setattr(xml_to_db, "get_xml_source_dir", lambda: str(source))
     return xml_to_db.main(list(argv))
+
+
+def _build_info(db_path: str) -> dict:
+    conn = sqlite3.connect(db_path)
+    try:
+        return dict(conn.execute("SELECT key, value FROM build_info").fetchall())
+    finally:
+        conn.close()
+
+
+BUILD_INFO_KEYS = {
+    "pmda_snapshot", "source_dir", "vendor_sha256", "vendor_manifest_zip_sha256",
+    "lxml_version", "libxslt_version", "loader_commit", "built_at",
+    "xml_total", "loaded", "failed",
+}
 
 
 @pytest.mark.usefixtures("vendor_styles")
@@ -108,6 +129,24 @@ def test_load_all_lands_minimal_xml_in_the_database(temp_db, xml_source, monkeyp
     finally:
         conn.close()
 
+    # 来歴（Issue #32）。ロードした入力・vendor・処理系・コードと結果のサマリ
+    info = _build_info(temp_db)
+    assert set(info) == BUILD_INFO_KEYS
+    assert info["pmda_snapshot"] == SNAPSHOT
+    assert info["source_dir"] == os.path.abspath(xml_source)
+    vendor_dir = Path(xml_to_db.VENDOR_XSL_PATH).parent
+    assert info["vendor_sha256"] == fetch_vendor.vendor_digest(vendor_dir)
+    manifest = fetch_vendor.read_manifest(vendor_dir)
+    if manifest is not None and fetch_vendor.manifest_mismatches(vendor_dir) == []:
+        assert info["vendor_manifest_zip_sha256"] == manifest["zip_sha256"]
+    else:
+        assert info["vendor_manifest_zip_sha256"] == "unknown"
+    assert info["lxml_version"] == ".".join(map(str, etree.LXML_VERSION))
+    assert info["libxslt_version"] == ".".join(map(str, etree.LIBXSLT_VERSION))
+    assert re.fullmatch(r"[0-9a-f]{40}(-dirty)?|unknown", info["loader_commit"])
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", info["built_at"])
+    assert (info["xml_total"], info["loaded"], info["failed"]) == ("1", "1", "0")
+
     # 本番ロード後に流すのと同じ整合性チェック（孤児・重複・FTS件数の一致など）
     monkeypatch.setattr(check_db_integrity, "DB_PATH", temp_db)
     assert check_db_integrity.check_integrity() is True
@@ -122,6 +161,33 @@ def test_load_all_reports_a_broken_xml(temp_db, xml_source, monkeypatch, quiet_e
     assert result.errors[0][0].endswith("broken.xml")
     assert result.ok is False
     assert quiet_error_log  # エラーログの書き出しは従来どおり行う
+    # 失敗があってもDBは書き換わっているので、来歴は失敗件数込みで書く
+    info = _build_info(temp_db)
+    assert (info["xml_total"], info["loaded"], info["failed"]) == ("2", "1", "1")
+
+
+@pytest.mark.usefixtures("vendor_styles")
+def test_reloading_overwrites_every_build_info_key(temp_db, xml_source, monkeypatch):
+    # 前回のロードの値が1つも残らないこと（キーごとに条件付きで書くと古い値が残る）
+    monkeypatch.setattr(xml_to_db, "ensure_fts_index", lambda: True)
+    assert xml_to_db.write_build_info(temp_db, {k: "stale" for k in BUILD_INFO_KEYS})
+    xml_to_db.load_all(str(xml_source), workers=1)
+    info = _build_info(temp_db)
+    assert set(info) == BUILD_INFO_KEYS
+    assert [k for k, v in info.items() if v == "stale"] == []
+
+
+@pytest.mark.usefixtures("vendor_styles")
+def test_a_failed_build_info_write_fails_the_load(temp_db, xml_source, monkeypatch, capsys):
+    monkeypatch.setattr(xml_to_db, "ensure_fts_index", lambda: True)
+    conn = sqlite3.connect(temp_db)
+    conn.execute("DROP TABLE build_info")  # ロード前の確認を過ぎた後で書けなくなった状態
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(xml_to_db, "check_schema", lambda db_path: "current")
+    result = xml_to_db.load_all(str(xml_source), workers=1)
+    assert (result.error_count, result.build_info_ok, result.ok) == (0, False, False)
+    assert "build_info を書けなかった" in capsys.readouterr().out
 
 
 @pytest.mark.usefixtures("vendor_styles")
@@ -204,6 +270,7 @@ def test_legacy_db_is_rejected(db_path, xml_source, no_pool, capsys):
 def test_any_non_current_state_is_rejected(temp_db, xml_source, monkeypatch, no_pool, state):
     monkeypatch.setattr(xml_to_db, "detect_schema_state", lambda cursor: state)
     assert _run_main(monkeypatch, xml_source) == 1
+    assert _build_info(temp_db) == {}  # 何も処理していないので来歴も書かない
 
 
 def test_the_partial_schema_from_issue_42_is_rejected(db_path, xml_source, no_pool, capsys):
@@ -279,3 +346,78 @@ def test_broken_xsl_is_rejected_before_the_pool_starts(
     result = xml_to_db.load_all(str(xml_source), workers=1)
     assert (result.vendor_ok, result.ok, result.total) == (False, False, 0)
     assert "fetch_vendor.py --force" in capsys.readouterr().out
+
+
+# --- 来歴の各項目（Issue #32） ---
+
+@pytest.mark.parametrize("path, expected", [
+    (f"/data/PMDAraw/{SNAPSHOT}/SGML_XML", SNAPSHOT),
+    (f"C:\\data\\{SNAPSHOT}\\SGML_XML", SNAPSHOT),
+    # 末端に近い側（実際に読んだ側）を採る
+    (f"/archive/pmda_all_sgml_xml_20250101/{SNAPSHOT}/SGML_XML", SNAPSHOT),
+    ("/data/somewhere/SGML_XML", "unknown"),
+    ("/data/pmda_all_sgml_xml_2026011/SGML_XML", "unknown"),  # 7桁は日付ではない
+])
+def test_pmda_snapshot_name(path, expected):
+    assert xml_to_db.pmda_snapshot_name(path) == expected
+
+
+def test_loader_commit_outside_a_repository_is_unknown(tmp_path, monkeypatch):
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+    assert xml_to_db.loader_commit(str(tmp_path)) == "unknown"
+
+
+def test_loader_commit_without_git_is_unknown(tmp_path, monkeypatch):
+    def no_git(*args, **kwargs):
+        raise FileNotFoundError("git")
+    monkeypatch.setattr(xml_to_db.subprocess, "run", no_git)
+    assert xml_to_db.loader_commit(str(tmp_path)) == "unknown"
+
+
+def test_loader_commit_marks_uncommitted_changes_as_dirty(tmp_path):
+    def git(*args):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                        "-c", "commit.gpgsign=false", *args],
+                       cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    (tmp_path / "tracked.py").write_text("a\n", encoding="utf-8")
+    git("add", "tracked.py")
+    git("commit", "-q", "-m", "init")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True,
+                          text=True, check=True).stdout.strip()
+
+    assert xml_to_db.loader_commit(str(tmp_path)) == head
+    # 未追跡ファイル（取得した vendor やDB等）は dirty にしない
+    (tmp_path / "untracked.txt").write_text("x", encoding="utf-8")
+    assert xml_to_db.loader_commit(str(tmp_path)) == head
+    (tmp_path / "tracked.py").write_text("b\n", encoding="utf-8")
+    assert xml_to_db.loader_commit(str(tmp_path)) == f"{head}-dirty"
+
+
+def _install_vendor(tmp_path) -> Path:
+    vendor_dir = tmp_path / "pmda-styles"
+    data = b"zip bytes"
+    for name in REQUIRED_FILES:
+        (vendor_dir / name).parent.mkdir(parents=True, exist_ok=True)
+        (vendor_dir / name).write_text(name, encoding="utf-8")
+    fetch_vendor._write_manifest(data, vendor_dir, None, "https://example.invalid/styles.zip")
+    return vendor_dir
+
+
+def test_manifest_zip_sha256_when_files_match_the_manifest(tmp_path):
+    vendor_dir = _install_vendor(tmp_path)
+    assert xml_to_db.manifest_zip_sha256(vendor_dir) == fetch_vendor._sha256(b"zip bytes")
+
+
+def test_manifest_zip_sha256_is_unknown_when_files_differ_from_the_manifest(tmp_path):
+    # 記録された zip から展開した資材とは言えない
+    vendor_dir = _install_vendor(tmp_path)
+    (vendor_dir / "preview_ja.xsl").write_text("edited", encoding="utf-8")
+    assert xml_to_db.manifest_zip_sha256(vendor_dir) == "unknown"
+
+
+def test_manifest_zip_sha256_without_a_manifest_is_unknown(tmp_path):
+    vendor_dir = _install_vendor(tmp_path)
+    (vendor_dir / fetch_vendor.MANIFEST_NAME).unlink()
+    assert xml_to_db.manifest_zip_sha256(vendor_dir) == "unknown"
