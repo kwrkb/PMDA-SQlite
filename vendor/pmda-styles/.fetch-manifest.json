@@ -1,0 +1,13 @@
+{
+  "fetched_at": "2026-11-12T15:43:49Z",
+  "files": {
+    "include/RegulatoryClassification.xml": "74e28f6c856e0849af16389aef158f6b2fb7eb9beb6d62e9c2a084a1b9481c38",
+    "include/StandardName.xml": "bf32dbbcd3f3f43cdecc02405381116f1d762ba5cdefa20e169a41c1e4e0859f",
+    "include/label-en.xml": "c9d6ff3a4558d556146d9a6cc67c787113f317af528750c6a70ceed8cec61605",
+    "include/label-ja.xml": "a2749a6770bb3fc08ce21cd949046db30414c49998a6251b7aa25c0b37dc50d9",
+    "include/preview-include.xsl": "7795ceab95879c95d4dead152e8acd806f5233ed5caa535556ad0da255555069",
+    "preview_ja.xsl": "325c75bde94a52f02fa81394d498f433f9617aaa71f1960df823f2156aa27667"
+  },
+  "url": "https://www.info.pmda.go.jp/go/download/styles.zip",
+  "zip_sha256": "d19d192b135fff9847b6c53ac9cd383fbefb8315e08ddb616f72d5ecc4833952"
+}

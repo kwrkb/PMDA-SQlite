@@ -33,7 +33,10 @@ load_log.txt
 .claude/settings.local.json
 
 # PMDA配布資材（再配布条件が不明確なため同梱しない。src/fetch_vendor.py で取得）
-vendor/pmda-styles/
+# ディレクトリごとではなく中身を無視する（ディレクトリを無視すると ! で戻せない）。
+# 取得した版の記録 .fetch-manifest.json だけは追跡し、版の変化を git diff に出す（Issue #33）
+vendor/pmda-styles/*
+!vendor/pmda-styles/.fetch-manifest.json
 # fetch_vendor.py の更新途中にだけ存在する一時ディレクトリ
 vendor/pmda-styles.staging/
 vendor/pmda-styles.backup/
