@@ -202,14 +202,20 @@ def _backup_dir(vendor_dir: Path) -> Path:
 def _recover_interrupted_swap(vendor_dir: Path) -> None:
     """前回の入れ替えがプロセスごと中断された跡を片付ける。
 
-    .backup だけが残っていれば2段 rename の間で止まったので既存版を戻す。
-    vendor_dir もあるなら入れ替え自体は終わっているので .backup は捨てる。
+    .backup が残っていれば2段 rename の間で止まったので既存版を戻す。
+    vendor_dir が必須ファイルの揃った状態で在るときだけ、入れ替え自体は終わって
+    いるとみなして .backup を捨てる。staging は揃っていることを確かめてから
+    rename するので、入れ替えの結果が不完全になることはない。不完全な vendor_dir は
+    中断後に外から作られたもの（git がマニフェストだけを戻した等、Issue #65）なので、
+    .backup の側が揃っていればそちらを戻す。
     """
     backup = _backup_dir(vendor_dir)
     if backup.exists():
-        if vendor_dir.exists():
+        if vendor_dir.exists() and (is_complete(vendor_dir) or not is_complete(backup)):
             shutil.rmtree(backup)
         else:
+            if vendor_dir.exists():
+                shutil.rmtree(vendor_dir)
             backup.rename(vendor_dir)
             print(f'前回中断された更新から既存版を復元しました: {vendor_dir}')
     staging = _staging_dir(vendor_dir)

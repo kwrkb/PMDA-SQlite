@@ -121,6 +121,43 @@ def test_an_interrupted_swap_is_recovered_on_the_next_run(vendor_dir):
     _assert_no_leftovers(vendor_dir)
 
 
+def test_an_interrupted_swap_survives_git_restoring_only_the_manifest(vendor_dir):
+    # 2段 rename の間で落ちたあと、git checkout 等が追跡中のマニフェストだけを戻した状態
+    backup = fetch_vendor._backup_dir(vendor_dir)
+    vendor_dir.rename(backup)
+    vendor_dir.mkdir()
+    (vendor_dir / fetch_vendor.MANIFEST_NAME).write_text("{}", encoding="utf-8")
+
+    with pytest.raises(RuntimeError):
+        fetch_vendor.install(b"broken", vendor_dir)
+    _assert_old_version_intact(vendor_dir)
+    _assert_no_leftovers(vendor_dir)
+
+
+def test_a_finished_swap_discards_the_leftover_backup(vendor_dir):
+    # 入れ替えは終わり、.backup の削除前に落ちた状態: 揃った vendor_dir が正
+    backup = fetch_vendor._backup_dir(vendor_dir)
+    backup.mkdir()
+    (backup / "preview_ja.xsl").write_text("older", encoding="utf-8")
+
+    with pytest.raises(RuntimeError):
+        fetch_vendor.install(b"broken", vendor_dir)
+    _assert_old_version_intact(vendor_dir)
+    _assert_no_leftovers(vendor_dir)
+
+
+def test_an_incomplete_backup_does_not_replace_an_incomplete_vendor(vendor_dir):
+    # どちらも揃っていなければ戻しても使えないので、vendor_dir の側を残す
+    backup = fetch_vendor._backup_dir(vendor_dir)
+    backup.mkdir()
+    (backup / "preview_ja.xsl").write_text("partial", encoding="utf-8")
+    (vendor_dir / "preview_ja.xsl").unlink()
+
+    fetch_vendor._recover_interrupted_swap(vendor_dir)
+    assert not backup.exists()
+    assert (vendor_dir / "only-in-old.txt").exists()
+
+
 def _run_main(monkeypatch, vendor_dir, data, *argv) -> int:
     monkeypatch.setattr(fetch_vendor, "VENDOR_DIR", vendor_dir)
     monkeypatch.setattr(fetch_vendor, "download", lambda url: data)
