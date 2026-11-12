@@ -1,6 +1,6 @@
 [tool.pytest.ini_options]
 # src/ はパッケージ化していない素のモジュール置き場なので、pytest 側でパスを通す
-# （実行時は PYTHONPATH=src を使う運用と揃える）。
+# （実行時は src\db_setup.py などを直接実行するので src が sys.path に入り、PYTHONPATH は要らない）。
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-q"

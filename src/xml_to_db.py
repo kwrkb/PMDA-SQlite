@@ -1,4 +1,4 @@
-"""
+r"""
 XML -> SQLite 並列ローダ（XSL方式・本実装）
 
 PMDA公式XSLTでXMLを添付文書体裁のHTMLへ変換し、Markdown化したセクション本文と、
@@ -13,8 +13,8 @@ XSLT変換はCPUバウンドかつXML1件あたり最大で秒オーダーかか
 multiprocessing で並列化する。DB書き込みは親プロセスで直列に行う。
 
 使用例:
-    python src/xml_to_db.py          # 全件ロード
-    python src/xml_to_db.py 10       # 10ディレクトリのみ（テスト用）
+    .venv\Scripts\python.exe src\xml_to_db.py     # 全件ロード
+    .venv\Scripts\python.exe src\xml_to_db.py 10  # 10ディレクトリのみ（テスト用）
 """
 
 import os
@@ -855,11 +855,11 @@ def main(argv: List[str]) -> int:
             limit = int(argv[0])
         except ValueError:
             print("エラー: 引数は整数で指定してください")
-            print("使用例: python src/xml_to_db.py 10")
+            print("使用例: .venv\\Scripts\\python.exe src\\xml_to_db.py 10")
             return 1
         if limit < 0:
             print(f"エラー: 引数は0以上で指定してください: {limit}")
-            print("使用例: python src/xml_to_db.py 10")
+            print("使用例: .venv\\Scripts\\python.exe src\\xml_to_db.py 10")
             return 1
 
     xml_source = get_xml_source_dir()
