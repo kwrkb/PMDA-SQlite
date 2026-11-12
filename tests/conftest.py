@@ -9,19 +9,15 @@ import os
 import pytest
 from lxml import etree
 
+from fetch_vendor import VENDOR_DIR, is_complete
+
 FIXTURE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 MINIMAL_XML = os.path.join(FIXTURE_DIR, "minimal.xml")
 
 VENDOR_MISSING_HINT = (
-    "vendor/pmda-styles/ が未取得です。"
+    f"{VENDOR_DIR} が未取得です。"
     r"テスト前に .venv\Scripts\python.exe src\fetch_vendor.py を実行してください"
 )
-
-
-def _vendor_is_complete() -> bool:
-    from fetch_vendor import VENDOR_DIR, is_complete
-
-    return is_complete(VENDOR_DIR)
 
 
 @pytest.fixture(scope="session")
@@ -32,13 +28,13 @@ def vendor_styles():
     ワーカープールの初期化が失敗し続けてハングしたりする。テストが壊れて
     いるように見えないよう、失敗ではなく skip にして取得方法を示す。
     """
-    if not _vendor_is_complete():
+    if not is_complete(VENDOR_DIR):
         pytest.skip(VENDOR_MISSING_HINT)
 
 
 def pytest_terminal_summary(terminalreporter):
     # addopts の -q では skip 理由が出ないので、対処法はここで1度だけ示す
-    if not _vendor_is_complete():
+    if not is_complete(VENDOR_DIR):
         terminalreporter.write_line(VENDOR_MISSING_HINT, yellow=True)
 
 
