@@ -65,6 +65,22 @@ def file_hashes(vendor_dir: Path) -> dict:
             for f in REQUIRED_FILES if (vendor_dir / f).is_file()}
 
 
+def vendor_digest(vendor_dir: Path) -> str:
+    """vendor 全体を表す1つの sha256（build_info.vendor_sha256 用, Issue #32）。
+
+    手元の REQUIRED_FILES の中身だけから決まる。マニフェストや取得日時、必須以外の
+    ファイルには左右されないので、同じ版なら何度取り直しても同じ値になる。
+    パスも混ぜるので、中身がファイル間で入れ替わっても別の値になる。
+    必須ファイルが欠けていれば FileNotFoundError（欠けた版の値を作らない）。
+    """
+    missing = [f for f in REQUIRED_FILES if not (vendor_dir / f).is_file()]
+    if missing:
+        raise FileNotFoundError(f'{vendor_dir} に必須ファイルがありません: {missing}')
+    hashes = file_hashes(vendor_dir)
+    lines = ''.join(f'{f}\0{hashes[f]}\n' for f in sorted(hashes))
+    return _sha256(lines.encode('utf-8'))
+
+
 def read_manifest(vendor_dir: Path):
     """マニフェストを読む。無い・壊れている・形が違う場合は None（比較対象なし）。"""
     try:

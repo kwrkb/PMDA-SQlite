@@ -41,6 +41,9 @@
   コミット済みのものから変わっていれば落ちる。PMDA が styles.zip を更新すると、
   コードを触っていなくてもキャッシュの切れた CI が赤くなる（意図した挙動）。
   下の手順で確かめてからマニフェストをコミットすれば緑に戻る
+- `fetch_vendor.vendor_digest()` は手元の必須ファイルの中身（パス込み）から vendor 全体の
+  sha256 を1つ返す。マニフェストや取得日時に左右されないので、同じ版なら同じ値になる
+  （DB に版を刻む `build_info.vendor_sha256` 用。Issue #32）
 - 変換のもう一つの実体である libxslt は lxml の wheel に同梱されているため、
   `requirements.txt` で lxml のメジャー版を固定している（libxslt の版までは固定できない）
 

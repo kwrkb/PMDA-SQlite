@@ -253,3 +253,39 @@ def test_main_force_reports_whether_the_version_changed(tmp_path, monkeypatch, c
     out = capsys.readouterr().out
     assert "変わりました" in out
     assert "preview_ja.xsl" in out
+
+
+# --- vendor 全体のダイジェスト（vendor_digest, build_info.vendor_sha256 用） ---
+
+def test_vendor_digest_is_stable_across_refetches_of_the_same_version(tmp_path):
+    a = tmp_path / "a" / "pmda-styles"
+    b = tmp_path / "b" / "pmda-styles"
+    fetch_vendor.install(_zip(_valid_files()), a)
+    # 別の zip（必須以外のファイルが違う）・別のマニフェストでも、必須ファイルが同じなら同じ値
+    fetch_vendor.install(_zip({**_valid_files(), "js/preview.js": "other"}), b)
+    _manifest_path(b).write_text("{}", encoding="utf-8")
+    digest = fetch_vendor.vendor_digest(a)
+    assert len(digest) == 64
+    assert digest == fetch_vendor.vendor_digest(a) == fetch_vendor.vendor_digest(b)
+
+
+def test_vendor_digest_changes_with_any_required_file(vendor_dir):
+    before = fetch_vendor.vendor_digest(vendor_dir)
+    (vendor_dir / "include" / "label-ja.xml").write_text("edited", encoding="utf-8")
+    assert fetch_vendor.vendor_digest(vendor_dir) != before
+
+
+def test_vendor_digest_depends_on_which_file_holds_which_content(vendor_dir):
+    first, second = fetch_vendor.REQUIRED_FILES[:2]
+    (vendor_dir / first).write_text("x", encoding="utf-8")
+    (vendor_dir / second).write_text("y", encoding="utf-8")
+    before = fetch_vendor.vendor_digest(vendor_dir)
+    (vendor_dir / first).write_text("y", encoding="utf-8")
+    (vendor_dir / second).write_text("x", encoding="utf-8")
+    assert fetch_vendor.vendor_digest(vendor_dir) != before
+
+
+def test_vendor_digest_refuses_an_incomplete_vendor(vendor_dir):
+    (vendor_dir / "preview_ja.xsl").unlink()
+    with pytest.raises(FileNotFoundError, match="preview_ja.xsl"):
+        fetch_vendor.vendor_digest(vendor_dir)
