@@ -11,6 +11,7 @@ import sqlite3
 import pytest
 
 import xml_to_db
+from fetch_vendor import REQUIRED_FILES
 
 
 @pytest.fixture
@@ -179,10 +180,40 @@ def test_missing_vendor_is_rejected_before_the_pool_starts(
     assert "fetch_vendor.py" in capsys.readouterr().out
 
 
-def test_partial_vendor_is_rejected(temp_db, xml_source, no_pool, vendor_dir):
-    from fetch_vendor import REQUIRED_FILES
-    for rel in REQUIRED_FILES[:-1]:  # 1つだけ欠けた状態
+def _write_vendor(vendor_dir, contents=None, files=REQUIRED_FILES) -> None:
+    """files を作る。contents に無いファイルは空にする。"""
+    contents = contents or {}
+    for rel in files:
         (vendor_dir / rel).parent.mkdir(parents=True, exist_ok=True)
-        (vendor_dir / rel).write_text("", encoding="utf-8")
+        (vendor_dir / rel).write_text(contents.get(rel, ""), encoding="utf-8")
+
+
+def test_partial_vendor_is_rejected(temp_db, xml_source, no_pool, vendor_dir):
+    _write_vendor(vendor_dir, files=REQUIRED_FILES[:-1])  # 1つだけ欠けた状態
     result = xml_to_db.load_all(str(xml_source), workers=1)
     assert (result.vendor_ok, result.ok, result.total) == (False, False, 0)
+
+
+# --- ロード前の XSL コンパイル確認（Issue #58） ---
+# 必須ファイルは揃っているが中身が壊れている状態。is_complete() は通り抜けるので、
+# 親プロセスでのコンパイルで止まらなければワーカー再生成が続いて返らない（no_pool が検出する）。
+
+_VALID_XSL_INCLUDING = """<?xml version="1.0"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:include href="include/preview-include.xsl"/>
+</xsl:stylesheet>
+"""
+
+
+@pytest.mark.parametrize("contents", [
+    pytest.param({"preview_ja.xsl": "not xml at all"}, id="broken-main-xsl"),
+    pytest.param({"preview_ja.xsl": _VALID_XSL_INCLUDING,
+                  "include/preview-include.xsl": "<xsl:stylesheet version="},
+                 id="broken-include"),
+])
+def test_broken_xsl_is_rejected_before_the_pool_starts(
+        temp_db, xml_source, no_pool, vendor_dir, capsys, contents):
+    _write_vendor(vendor_dir, contents)
+    result = xml_to_db.load_all(str(xml_source), workers=1)
+    assert (result.vendor_ok, result.ok, result.total) == (False, False, 0)
+    assert "fetch_vendor.py --force" in capsys.readouterr().out

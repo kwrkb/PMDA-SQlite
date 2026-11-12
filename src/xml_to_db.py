@@ -40,6 +40,7 @@ from config import (
     get_xml_source_dir,
 )
 from db_setup import detect_schema_state, ensure_fts_index
+from fetch_vendor import broken_hint as vendor_broken_hint
 from fetch_vendor import is_complete as vendor_is_complete
 from fetch_vendor import missing_hint as vendor_missing_hint
 from html_to_markdown import convert_section_body
@@ -660,6 +661,22 @@ def check_schema(db_path: str) -> str:
         conn.close()
 
 
+def check_vendor(xsl_path: str) -> Optional[str]:
+    """ワーカーが読むのと同じ XSL を確かめ、問題があれば案内文を返す（無ければ None）。
+
+    ワーカーの initializer（_worker_init → load_xslt）が例外を出すと、Pool は死んだ
+    ワーカーを作り直し続け、結果が永久に返らない（Issue #56）。ファイルが揃っていても
+    中身が壊れていれば同じことが起きるため（Issue #58）、存在確認に加えて1度コンパイルしてみる。"""
+    vendor_dir = Path(xsl_path).parent
+    if not vendor_is_complete(vendor_dir):
+        return vendor_missing_hint(vendor_dir)
+    try:
+        load_xslt(xsl_path)
+    except (etree.LxmlError, OSError) as e:
+        return vendor_broken_hint(xsl_path, e)
+    return None
+
+
 def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional[int] = None) -> LoadResult:
     # ワーカープールを起動する前に確かめる。テーブル不在のまま走らせると、全件分の
     # XSLT変換（約26分）を払ったうえで store_result() が1件ずつ失敗する。
@@ -670,12 +687,9 @@ def load_all(xml_source_dir: str, limit: Optional[int] = None, workers: Optional
         print("判定: 失敗（ロード前のスキーマ確認）。XMLは1件も処理していません")
         return LoadResult(schema_state=schema_state)
 
-    # ワーカーの initializer（_worker_init → load_xslt）が例外を出すと、Pool は死んだ
-    # ワーカーを作り直し続け、結果が永久に返らない（Issue #56）。プールが読むのと同じ
-    # ディレクトリを、起動前に確かめる。
-    vendor_dir = Path(VENDOR_XSL_PATH).parent
-    if not vendor_is_complete(vendor_dir):
-        print(f"エラー: {vendor_missing_hint(vendor_dir)}")
+    vendor_problem = check_vendor(VENDOR_XSL_PATH)
+    if vendor_problem:
+        print(f"エラー: {vendor_problem}")
         print("判定: 失敗（ロード前のvendor確認）。XMLは1件も処理していません")
         return LoadResult(vendor_ok=False)
 

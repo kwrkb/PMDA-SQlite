@@ -50,6 +50,14 @@ def missing_hint(vendor_dir: Path) -> str:
             r'先に .venv\Scripts\python.exe src\fetch_vendor.py を実行してください')
 
 
+def broken_hint(xsl_path, error: Exception) -> str:
+    """必須ファイルは揃っているが XSL をコンパイルできないときの対処法。
+    is_complete() が真なので、--force を付けないと fetch_vendor.py は何もしない。"""
+    return (f'{xsl_path} をXSLTとしてコンパイルできません（{type(error).__name__}: {error}）。'
+            'vendor のファイルが壊れています。'
+            r'先に .venv\Scripts\python.exe src\fetch_vendor.py --force で取り直してください')
+
+
 def download(url: str) -> bytes:
     """URLからzipのバイト列を取得する。"""
     # urllib既定のUAを弾くサーバがあるため、素朴なUAを名乗る
